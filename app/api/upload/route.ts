@@ -1,69 +1,86 @@
-import { getServerSession } from "next-auth"
 import { NextRequest, NextResponse } from "next/server"
+import { getToken } from "next-auth/jwt"
+import { db } from "@/lib/db"
+import * as XLSX from "xlsx"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
-import { authOptions } from "@/lib/auth"
-import { db } from "@/lib/db"
-import { ingestDocument } from "@/lib/ingest"
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  if (!token?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const form = await req.formData()
   const file = form.get("file") as File
   const projectName = (form.get("projectName") as string) || undefined
   const location = (form.get("location") as string) || undefined
+  const temporary = form.get("temporary") === "true"
+  const chatId = (form.get("chatId") as string) || undefined
 
-  if (!file) {
-    return NextResponse.json({ error: "No file" }, { status: 400 })
-  }
+  if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 })
 
+  // Only Excel allowed
   const name = file.name.toLowerCase()
-  const fileType = name.endsWith(".pdf") ? "pdf"
-    : name.match(/\.(xlsx?|csv)$/) ? "excel"
-      : name.match(/\.docx?$/) ? "word"
-        : null
-
-  if (!fileType) {
-    return NextResponse.json({ error: "Unsupported type. Use PDF, Excel, or Word." }, { status: 400 })
+  if (!name.match(/\.(xlsx?|xls|csv)$/)) {
+    return NextResponse.json({
+      error: "Only Excel files (.xlsx, .xls, .csv) are supported."
+    }, { status: 400 })
   }
 
-  // Save file to local public/uploads folder (no Vercel Blob needed)
+  const bytes = await file.arrayBuffer()
+  const buffer = Buffer.from(bytes)
+
+  // Save to local public/uploads folder
   const uploadDir = path.join(process.cwd(), "public", "uploads")
   await mkdir(uploadDir, { recursive: true })
-  const fileName = `${Date.now()}_${file.name}`
+  const fileName = `${Date.now()}_${file.name.replace(/\s+/g, "_")}`
   const filePath = path.join(uploadDir, fileName)
-  const bytes = await file.arrayBuffer()
-  await writeFile(filePath, Buffer.from(bytes))
-  const blobUrl = `/uploads/${fileName}`
+  await writeFile(filePath, buffer)
 
+  // Parse Excel content
+  let extractedText = ""
+  try {
+    const workbook = XLSX.read(buffer, { type: "buffer" })
+    const sheets: string[] = []
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName]
+      const csv = XLSX.utils.sheet_to_csv(sheet)
+      if (csv.trim()) {
+        sheets.push(`=== Sheet: ${sheetName} ===\n${csv}`)
+      }
+    }
+    extractedText = sheets.join("\n\n")
+  } catch (e) {
+    console.error("Excel parse error:", e)
+    return NextResponse.json({ error: "Could not parse Excel file." }, { status: 400 })
+  }
+
+  if (!extractedText.trim()) {
+    return NextResponse.json({ error: "Excel file appears to be empty." }, { status: 400 })
+  }
+
+  // Save document record
   const doc = await db.document.create({
     data: {
       name: file.name,
-      projectName,
+      projectName: projectName || file.name.replace(/\.[^.]+$/, ""),
       location,
-      blobUrl,
-      fileType,
+      blobUrl: `/uploads/${fileName}`,
+      fileType: "excel",
       fileSize: file.size,
-      uploadedBy: session.user.id,
+      status: "ready",
+      chunkCount: 1,
+      uploadedBy: token.id as string,
+      temporary,
+      chatId: temporary ? (chatId ?? null) : null,
     },
   })
 
-  // Run ingestion in background
-  const buf = Buffer.from(bytes)
-  ingestDocument({
-    documentId: doc.id,
-    documentName: file.name,
-    projectName,
-    location,
-    fileBuffer: buf,
-    fileType,
-  }).catch(e => console.error("Ingest error:", e))
+  // Save extracted content for RAG
+  await db.documentContent.create({
+    data: { documentId: doc.id, content: extractedText },
+  })
 
   return NextResponse.json({
-    doc: { id: doc.id, name: doc.name, status: doc.status }
+    doc: { id: doc.id, name: doc.name, status: "ready", temporary }
   })
 }

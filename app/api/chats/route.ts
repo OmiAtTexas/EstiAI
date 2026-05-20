@@ -14,6 +14,21 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ chats })
 }
 
+export async function PATCH(req: NextRequest) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  if (!token?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const { id, title } = await req.json()
+  if (!id || !title) return NextResponse.json({ error: "Missing id or title" }, { status: 400 })
+
+  const chat = await db.chat.updateMany({
+    where: { id, userId: token.id as string },
+    data: { title },
+  })
+
+  return NextResponse.json({ ok: true })
+}
+
 export async function DELETE(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

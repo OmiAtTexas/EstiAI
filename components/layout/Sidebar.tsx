@@ -1,15 +1,17 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { signOut } from "next-auth/react"
-import { HardHat, Plus, MessageSquare, FileText, Settings, LogOut, Trash2, PanelLeft } from "lucide-react"
-import { cn } from "@/lib/utils"
+import {
+  HardHat, Plus, MessageSquare, FileText, Settings,
+  Trash2, PanelLeft, Pin, PinOff, Pencil, MoreHorizontal,
+  LogOut, HelpCircle, User, Palette, ChevronRight, Moon, Sun
+} from "lucide-react"
 
-type Chat = { id: string; title: string; updatedAt: string }
+type Chat = { id: string; title: string; updatedAt: string; pinned?: boolean }
 type User = { name?: string | null; email?: string | null; image?: string | null }
 
-// Export theme so other components can use it
 export type Theme = typeof DARK_THEME
 export const DARK_THEME = {
   bg: "#0d1117",
@@ -42,7 +44,6 @@ export const LIGHT_THEME = {
   accentText: "#ffffff",
 }
 
-// Global theme state — share across components via localStorage
 let _isDark = true
 const listeners: Array<(d: boolean) => void> = []
 export function getTheme() { return _isDark ? DARK_THEME : LIGHT_THEME }
@@ -62,35 +63,241 @@ export function useTheme() {
   return { isDark, T: isDark ? DARK_THEME : LIGHT_THEME, toggle: toggleGlobalTheme }
 }
 
+// ── User menu popup ───────────────────────────────────────────────
+function UserMenu({ user, T, isDark, onToggleTheme, onClose }: {
+  user: User
+  T: Theme
+  isDark: boolean
+  onToggleTheme: () => void
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const router = useRouter()
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [onClose])
+
+  return (
+    <div
+      ref={ref}
+      className="absolute bottom-14 left-2 right-2 z-50 rounded-xl overflow-hidden shadow-2xl"
+      style={{ background: T.surface, border: `1px solid ${T.borderHover}` }}
+    >
+      {/* User info header */}
+      <div className="px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0"
+            style={{ background: `${T.accent}20`, color: T.accent }}>
+            {user.name?.[0]?.toUpperCase() ?? user.email?.[0]?.toUpperCase() ?? "?"}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate" style={{ color: T.text }}>{user.name ?? "User"}</p>
+            <p className="text-xs truncate" style={{ color: T.faint }}>{user.email}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Menu items */}
+      <div className="py-1">
+
+        {/* Settings */}
+        <button
+          onClick={() => { router.push("/settings"); onClose() }}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+          style={{ color: T.text, background: "transparent" }}
+          onMouseEnter={e => e.currentTarget.style.background = T.surfHover}
+          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+        >
+          <Settings size={15} style={{ color: T.muted }} />
+          <span>Settings</span>
+          <ChevronRight size={13} className="ml-auto" style={{ color: T.faint }} />
+        </button>
+
+        {/* Theme toggle */}
+        <button
+          onClick={() => { onToggleTheme() }}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+          style={{ color: T.text, background: "transparent" }}
+          onMouseEnter={e => e.currentTarget.style.background = T.surfHover}
+          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+        >
+          {isDark ? <Sun size={15} style={{ color: T.muted }} /> : <Moon size={15} style={{ color: T.muted }} />}
+          <span>{isDark ? "Light mode" : "Dark mode"}</span>
+          {/* Toggle pill */}
+          <div className="ml-auto w-9 h-5 rounded-full relative transition-all"
+            style={{ background: isDark ? T.accent : T.surfActive, border: `1px solid ${T.border}` }}>
+            <span className="absolute top-0.5 w-4 h-4 rounded-full transition-all"
+              style={{
+                background: isDark ? "#fff" : T.accent,
+                left: isDark ? "auto" : "2px",
+                right: isDark ? "2px" : "auto",
+              }} />
+          </div>
+        </button>
+
+        {/* Divider */}
+        <div style={{ height: 1, background: T.border, margin: "4px 0" }} />
+
+        {/* Get help */}
+        <button
+          onClick={() => { window.open("mailto:support@yourcompany.com"); onClose() }}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+          style={{ color: T.text, background: "transparent" }}
+          onMouseEnter={e => e.currentTarget.style.background = T.surfHover}
+          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+        >
+          <HelpCircle size={15} style={{ color: T.muted }} />
+          <span>Get help</span>
+        </button>
+
+        {/* Divider */}
+        <div style={{ height: 1, background: T.border, margin: "4px 0" }} />
+
+        {/* Log out */}
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+          style={{ color: "#ef4444", background: "transparent" }}
+          onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.08)"}
+          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+        >
+          <LogOut size={15} />
+          <span>Log out</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Chat context menu ─────────────────────────────────────────────
+function ChatMenu({ chat, T, onPin, onRename, onDelete, onClose }: {
+  chat: Chat; T: Theme
+  onPin: () => void; onRename: () => void; onDelete: () => void; onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [onClose])
+
+  return (
+    <div ref={ref} className="absolute right-0 top-7 z-50 rounded-lg overflow-hidden shadow-xl"
+      style={{ background: T.surface, border: `1px solid ${T.borderHover}`, minWidth: 140 }}>
+      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPin(); onClose() }}
+        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+        style={{ color: T.muted }}
+        onMouseEnter={e => e.currentTarget.style.background = T.surfHover}
+        onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+        {chat.pinned ? <PinOff size={13} /> : <Pin size={13} />}
+        {chat.pinned ? "Unpin" : "Pin"}
+      </button>
+      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRename(); onClose() }}
+        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+        style={{ color: T.muted }}
+        onMouseEnter={e => e.currentTarget.style.background = T.surfHover}
+        onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+        <Pencil size={13} /> Rename
+      </button>
+      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); onClose() }}
+        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors"
+        style={{ color: "#ef4444" }}
+        onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.08)"}
+        onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+        <Trash2 size={13} /> Delete
+      </button>
+    </div>
+  )
+}
+
+// ── Rename input ──────────────────────────────────────────────────
+function RenameInput({ chatId, currentTitle, T, onDone }: {
+  chatId: string; currentTitle: string; T: Theme; onDone: (t: string) => void
+}) {
+  const [val, setVal] = useState(currentTitle)
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => { ref.current?.focus(); ref.current?.select() }, [])
+
+  async function save() {
+    const trimmed = val.trim()
+    if (!trimmed) return onDone(currentTitle)
+    await fetch("/api/chats", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: chatId, title: trimmed }),
+    })
+    onDone(trimmed)
+  }
+
+  return (
+    <input ref={ref} value={val} onChange={e => setVal(e.target.value)}
+      onBlur={save}
+      onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") onDone(currentTitle) }}
+      className="flex-1 text-xs focus:outline-none rounded px-1"
+      style={{ color: T.text, border: `1px solid ${T.accent}60`, background: T.surfActive, padding: "2px 6px" }}
+      onClick={e => e.preventDefault()} />
+  )
+}
+
+// ── Main Sidebar ──────────────────────────────────────────────────
 export function Sidebar({ user }: { user: User }) {
   const [open, setOpen] = useState(true)
   const [chats, setChats] = useState<Chat[]>([])
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const { isDark, T, toggle } = useTheme()
   const pathname = usePathname()
   const router = useRouter()
 
   useEffect(() => {
-    fetch("/api/chats").then(r => r.json()).then(d => setChats(d.chats ?? []))
+    fetch("/api/chats").then(r => r.json()).then(d => {
+      const loaded = d.chats ?? []
+      const pinned: string[] = JSON.parse(localStorage.getItem("pinnedChats") || "[]")
+      setChats(loaded.map((c: Chat) => ({ ...c, pinned: pinned.includes(c.id) })))
+    })
   }, [pathname])
 
-  async function del(e: React.MouseEvent, id: string) {
-    e.preventDefault(); e.stopPropagation()
+  function togglePin(id: string) {
+    setChats(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, pinned: !c.pinned } : c)
+      const pinned = updated.filter(c => c.pinned).map(c => c.id)
+      localStorage.setItem("pinnedChats", JSON.stringify(pinned))
+      return updated
+    })
+  }
+
+  async function deleteChat(id: string) {
     await fetch(`/api/chats?id=${id}`, { method: "DELETE" })
     setChats(p => p.filter(c => c.id !== id))
     if (pathname === `/chat/${id}`) router.push("/chat")
   }
 
+  function renameChat(id: string, newTitle: string) {
+    setChats(p => p.map(c => c.id === id ? { ...c, title: newTitle } : c))
+    setRenamingId(null)
+  }
+
+  const pinnedChats = chats.filter(c => c.pinned)
+  const unpinned = chats.filter(c => !c.pinned)
   const groups = [
-    { label: "Today", items: chats.filter(c => diffHours(c.updatedAt) < 24) },
-    { label: "This week", items: chats.filter(c => diffHours(c.updatedAt) >= 24 && diffHours(c.updatedAt) < 168) },
-    { label: "Earlier", items: chats.filter(c => diffHours(c.updatedAt) >= 168) },
+    { label: "Pinned", items: pinnedChats },
+    { label: "Today", items: unpinned.filter(c => diffHours(c.updatedAt) < 24) },
+    { label: "This week", items: unpinned.filter(c => diffHours(c.updatedAt) >= 24 && diffHours(c.updatedAt) < 168) },
+    { label: "Earlier", items: unpinned.filter(c => diffHours(c.updatedAt) >= 168) },
   ]
 
   return (
-    <aside
-      className="flex flex-col h-full shrink-0 overflow-hidden transition-all duration-200"
-      style={{ width: open ? 240 : 56, background: T.sidebar, borderRight: `1px solid ${T.border}` }}
-    >
+    <aside className="flex flex-col h-full shrink-0 overflow-hidden transition-all duration-200 relative"
+      style={{ width: open ? 240 : 56, background: T.sidebar, borderRightWidth: "1px", borderRightStyle: "solid", borderRightColor: T.border }}>
+
       {/* Header */}
       <div className="flex items-center h-14 px-3 shrink-0 gap-2"
         style={{ borderBottom: `1px solid ${T.border}` }}>
@@ -100,29 +307,10 @@ export function Sidebar({ user }: { user: User }) {
               style={{ background: `${T.accent}20`, border: `1px solid ${T.accent}35` }}>
               <HardHat size={14} color={T.accent} />
             </div>
-            <span className="font-semibold text-sm flex-1" style={{ color: T.text }}>EstimateAI</span>
+            <span className="font-semibold text-sm flex-1" style={{ color: T.text }}>Esti-Mate AI</span>
           </>
         )}
-        {/* Dark/Light toggle */}
-        {open && (
-          <button
-            onClick={toggle}
-            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            className="relative w-9 h-5 rounded-full transition-all flex-shrink-0"
-            style={{ background: isDark ? T.accent : T.surfActive, border: `1px solid ${T.border}` }}
-          >
-            <span className="absolute top-0.5 w-4 h-4 rounded-full transition-all flex items-center justify-center text-[9px]"
-              style={{
-                background: isDark ? "#fff" : T.accent,
-                left: isDark ? "auto" : "2px",
-                right: isDark ? "2px" : "auto",
-              }}>
-              {isDark ? "🌙" : "☀"}
-            </span>
-          </button>
-        )}
-        <button onClick={() => setOpen(!open)}
-          className="p-1.5 rounded-md transition-colors"
+        <button onClick={() => setOpen(!open)} className="p-1.5 rounded-md transition-colors"
           style={{ color: T.faint }}
           onMouseEnter={e => (e.currentTarget.style.color = T.muted)}
           onMouseLeave={e => (e.currentTarget.style.color = T.faint)}>
@@ -133,12 +321,10 @@ export function Sidebar({ user }: { user: User }) {
       {/* New chat */}
       <div className="px-2 py-2 shrink-0">
         <Link href="/chat">
-          <button
-            className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg font-semibold text-sm transition-all"
+          <button className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg font-semibold text-sm transition-all"
             style={{ background: T.accent, color: T.accentText, justifyContent: open ? "flex-start" : "center" }}
             onMouseEnter={e => (e.currentTarget.style.background = T.accentDark)}
-            onMouseLeave={e => (e.currentTarget.style.background = T.accent)}
-          >
+            onMouseLeave={e => (e.currentTarget.style.background = T.accent)}>
             <Plus size={15} className="shrink-0" />
             {open && "New Chat"}
           </button>
@@ -153,28 +339,44 @@ export function Sidebar({ user }: { user: User }) {
           )}
           {groups.map(({ label, items }) => items.length === 0 ? null : (
             <div key={label} className="mb-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wider px-2 py-1.5"
-                style={{ color: T.faint }}>{label}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider px-2 py-1.5 flex items-center gap-1"
+                style={{ color: T.faint }}>
+                {label === "Pinned" && <Pin size={9} />}{label}
+              </p>
               {items.map(c => (
                 <Link key={c.id} href={`/chat/${c.id}`}>
-                  <div
-                    className="group flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors"
+                  <div className="group flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors relative"
                     style={{
                       background: pathname === `/chat/${c.id}` ? T.surfActive : "transparent",
                       color: pathname === `/chat/${c.id}` ? T.text : T.muted,
                     }}
                     onMouseEnter={e => { if (pathname !== `/chat/${c.id}`) e.currentTarget.style.background = T.surfHover }}
-                    onMouseLeave={e => { if (pathname !== `/chat/${c.id}`) e.currentTarget.style.background = "transparent" }}
-                  >
-                    <MessageSquare size={13} className="shrink-0" style={{ color: T.faint }} />
-                    <span className="text-xs flex-1 truncate">{c.title}</span>
-                    <button onClick={(e) => del(e, c.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all"
-                      style={{ color: T.faint }}
-                      onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
-                      onMouseLeave={e => (e.currentTarget.style.color = T.faint)}>
-                      <Trash2 size={11} />
-                    </button>
+                    onMouseLeave={e => { if (pathname !== `/chat/${c.id}`) e.currentTarget.style.background = "transparent" }}>
+                    {c.pinned
+                      ? <Pin size={10} className="shrink-0" style={{ color: T.accent }} />
+                      : <MessageSquare size={13} className="shrink-0" style={{ color: T.faint }} />
+                    }
+                    {renamingId === c.id ? (
+                      <RenameInput chatId={c.id} currentTitle={c.title} T={T} onDone={(t) => renameChat(c.id, t)} />
+                    ) : (
+                      <span className="text-xs flex-1 truncate">{c.title}</span>
+                    )}
+                    {renamingId !== c.id && (
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpenId(menuOpenId === c.id ? null : c.id) }}
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all"
+                        style={{ color: T.faint }}
+                        onMouseEnter={e => (e.currentTarget.style.color = T.muted)}
+                        onMouseLeave={e => (e.currentTarget.style.color = T.faint)}>
+                        <MoreHorizontal size={13} />
+                      </button>
+                    )}
+                    {menuOpenId === c.id && (
+                      <ChatMenu chat={c} T={T}
+                        onPin={() => togglePin(c.id)}
+                        onRename={() => { setRenamingId(c.id); setMenuOpenId(null) }}
+                        onDelete={() => deleteChat(c.id)}
+                        onClose={() => setMenuOpenId(null)} />
+                    )}
                   </div>
                 </Link>
               ))}
@@ -184,55 +386,60 @@ export function Sidebar({ user }: { user: User }) {
       )}
       {!open && <div className="flex-1" />}
 
-      {/* Nav links */}
+      {/* Nav links — Documents only, Settings moved to user menu */}
       <div className="px-2 pb-1 shrink-0" style={{ borderTop: `1px solid ${T.border}` }}>
-        {[
-          { href: "/documents", icon: FileText, label: "Documents" },
-          { href: "/settings", icon: Settings, label: "Settings" },
-        ].map(({ href, icon: Icon, label }) => (
-          <Link key={href} href={href}>
-            <div
-              className="flex items-center gap-2 px-2 py-2 rounded-lg mt-1 transition-colors"
-              style={{
-                background: pathname === href ? T.surfActive : "transparent",
-                color: pathname === href ? T.text : T.muted,
-                justifyContent: open ? "flex-start" : "center",
-              }}
-              onMouseEnter={e => { if (pathname !== href) e.currentTarget.style.background = T.surfHover }}
-              onMouseLeave={e => { if (pathname !== href) e.currentTarget.style.background = "transparent" }}
-            >
-              <Icon size={15} className="shrink-0" />
-              {open && <span className="text-sm">{label}</span>}
-            </div>
-          </Link>
-        ))}
+        <Link href="/documents">
+          <div className="flex items-center gap-2 px-2 py-2 rounded-lg mt-1 transition-colors"
+            style={{
+              background: pathname === "/documents" ? T.surfActive : "transparent",
+              color: pathname === "/documents" ? T.text : T.muted,
+              justifyContent: open ? "flex-start" : "center",
+            }}
+            onMouseEnter={e => { if (pathname !== "/documents") e.currentTarget.style.background = T.surfHover }}
+            onMouseLeave={e => { if (pathname !== "/documents") e.currentTarget.style.background = "transparent" }}>
+            <FileText size={15} className="shrink-0" />
+            {open && <span className="text-sm">Documents</span>}
+          </div>
+        </Link>
       </div>
 
-      {/* User */}
-      <div className="px-2 pb-3 shrink-0 pt-2" style={{ borderTop: `1px solid ${T.border}` }}>
-        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
-          style={{ justifyContent: open ? "flex-start" : "center" }}>
+      {/* User button — opens popup menu */}
+      <div className="px-2 pb-3 shrink-0 pt-2 relative" style={{ borderTop: `1px solid ${T.border}` }}>
+        <button
+          onClick={() => setUserMenuOpen(!userMenuOpen)}
+          className="w-full flex items-center gap-2 px-2 py-2 rounded-lg transition-colors"
+          style={{
+            justifyContent: open ? "flex-start" : "center",
+            background: userMenuOpen ? T.surfActive : "transparent",
+          }}
+          onMouseEnter={e => { if (!userMenuOpen) e.currentTarget.style.background = T.surfHover }}
+          onMouseLeave={e => { if (!userMenuOpen) e.currentTarget.style.background = "transparent" }}
+        >
           <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
             style={{ background: `${T.accent}20`, color: T.accent }}>
             {user.name?.[0]?.toUpperCase() ?? user.email?.[0]?.toUpperCase() ?? "?"}
           </div>
           {open && (
             <>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 text-left">
                 <p className="text-xs font-medium truncate" style={{ color: T.text }}>{user.name ?? "User"}</p>
                 <p className="text-[10px] truncate" style={{ color: T.faint }}>{user.email}</p>
               </div>
-              <button onClick={() => signOut({ callbackUrl: "/login" })}
-                className="p-1 rounded transition-colors"
-                style={{ color: T.faint }}
-                onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
-                onMouseLeave={e => (e.currentTarget.style.color = T.faint)}
-                title="Sign out">
-                <LogOut size={13} />
-              </button>
+              <MoreHorizontal size={14} style={{ color: T.faint, flexShrink: 0 }} />
             </>
           )}
-        </div>
+        </button>
+
+        {/* User menu popup */}
+        {userMenuOpen && open && (
+          <UserMenu
+            user={user}
+            T={T}
+            isDark={isDark}
+            onToggleTheme={toggle}
+            onClose={() => setUserMenuOpen(false)}
+          />
+        )}
       </div>
     </aside>
   )

@@ -1,17 +1,13 @@
-import { getServerSession } from "next-auth"
 import { NextRequest, NextResponse } from "next/server"
-import { authOptions } from "@/lib/auth"
+import { getToken } from "next-auth/jwt"
 import { db } from "@/lib/db"
 import { ragStream } from "@/lib/rag"
-import { getToken } from "next-auth/jwt"
 
 export async function POST(req: NextRequest) {
-  // Use getToken instead of getServerSession — works reliably with JWT strategy
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const userId = token.id as string
-
   const { message, chatId } = await req.json()
   if (!message?.trim()) return NextResponse.json({ error: "Empty message" }, { status: 400 })
 
@@ -34,10 +30,14 @@ export async function POST(req: NextRequest) {
 
   await db.message.create({ data: { chatId: chat.id, role: "user", content: message } })
 
-  const history = chat.messages.map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
+  const history = chat.messages.map(m => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }))
 
   try {
-    const { tokens, sources } = await ragStream(message, history)
+    // Pass chatId to ragStream so it can include temporary docs for this chat
+    const { tokens, sources } = await ragStream(message, history, chat.id)
     let full = ""
 
     const body = new ReadableStream({

@@ -54,7 +54,7 @@ export default function LoginPage() {
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all"
             style={{ background: T.card, border: `1px solid ${T.border}`, color: T.faint }}
           >
-            {isDark ? "☀ Light" : "🌙 Dark"}
+            {isDark ? "☀️ Light" : "🌙 Dark"}
           </button>
         </div>
 
@@ -65,7 +65,7 @@ export default function LoginPage() {
               style={{ background: `${T.accent}15`, border: `1px solid ${T.accent}30` }}>
               <HardHat size={22} color={T.accent} />
             </div>
-            <h1 className="text-lg font-semibold" style={{ color: T.text }}>EstimateAI</h1>
+            <h1 className="text-lg font-semibold" style={{ color: T.text }}>Esti-Mate AI</h1>
             <p className="text-xs mt-1" style={{ color: T.muted }}>Cost Intelligence Platform</p>
           </div>
 
@@ -103,7 +103,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs mt-4" style={{ color: T.faint }}>
-          Powered by <span style={{ color: T.muted }}>Claude AI</span> · Internal use only
+          Powered for <span style={{ color: T.muted }}> OCMI </span> · Internal use only
         </p>
       </div>
     </div>

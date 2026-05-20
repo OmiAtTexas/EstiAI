@@ -1,19 +1,128 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { HardHat, FileBarChart2, DollarSign, MapPin, Layers } from "lucide-react"
+import { HardHat, Database, MessageSquare, X } from "lucide-react"
 import { MessageBubble, type Message } from "./MessageBubble"
 import { MessageInput } from "./MessageInput"
 import { TypingIndicator } from "./TypingIndicator"
-import { ContextPanel } from "@/components/layout/ContextPanel"
 import { useTheme } from "@/components/layout/Sidebar"
 
-const CHIPS = [
-  { icon: FileBarChart2, text: "Summarize the cost breakdown from our uploaded project files" },
-  { icon: DollarSign, text: "What were the labor and material costs in our recent projects?" },
-  { icon: Layers, text: "Compare total project costs across all uploaded documents" },
-  { icon: MapPin, text: "What permits and fees appear in our project files?" },
-]
+function StorageModal({ files, T, onConfirm, onCancel }: {
+  files: File[]
+  T: any
+  onConfirm: (temporary: boolean) => void
+  onCancel: () => void
+}) {
+  const [selected, setSelected] = useState<"permanent" | "temporary" | null>(null)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.65)" }}>
+      <div className="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl"
+        style={{ background: T.surface, border: `1px solid ${T.borderHover}` }}>
+
+        <div className="flex items-center justify-between px-6 py-4"
+          style={{ borderBottom: `1px solid ${T.border}` }}>
+          <div>
+            <h2 className="text-base font-semibold" style={{ color: T.text }}>
+              How do you want to store this?
+            </h2>
+            <p className="text-xs mt-0.5" style={{ color: T.faint }}>
+              {files.length === 1 ? files[0].name : `${files.length} files selected`}
+            </p>
+          </div>
+          <button onClick={onCancel} className="p-1.5 rounded-lg transition-colors"
+            style={{ color: T.faint }}
+            onMouseEnter={e => (e.currentTarget.style.background = T.surfHover)}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-3">
+          <button
+            onClick={() => setSelected("permanent")}
+            className="w-full flex items-start gap-4 p-4 rounded-xl text-left transition-all"
+            style={{
+              background: selected === "permanent" ? `${T.accent}12` : T.surfHover,
+              border: `2px solid ${selected === "permanent" ? T.accent : T.border}`,
+            }}
+          >
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+              style={{ background: `${T.accent}20` }}>
+              <Database size={16} color={T.accent} />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold" style={{ color: T.text }}>Save permanently</p>
+              <p className="text-xs mt-0.5 leading-relaxed" style={{ color: T.muted }}>
+                Saved to your Documents library. Available in all future chats. Delete anytime.
+              </p>
+            </div>
+            <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-1"
+              style={{
+                borderColor: selected === "permanent" ? T.accent : T.faint,
+                background: selected === "permanent" ? T.accent : "transparent",
+              }}>
+              {selected === "permanent" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+            </div>
+          </button>
+
+          <button
+            onClick={() => setSelected("temporary")}
+            className="w-full flex items-start gap-4 p-4 rounded-xl text-left transition-all"
+            style={{
+              background: selected === "temporary" ? `${T.accent}12` : T.surfHover,
+              border: `2px solid ${selected === "temporary" ? T.accent : T.border}`,
+            }}
+          >
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+              style={{ background: "rgba(99,102,241,0.15)" }}>
+              <MessageSquare size={16} color="#818cf8" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold" style={{ color: T.text }}>This chat only</p>
+              <p className="text-xs mt-0.5 leading-relaxed" style={{ color: T.muted }}>
+                Only used in this chat. Not saved to Documents. Removed when this chat is deleted.
+              </p>
+            </div>
+            <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-1"
+              style={{
+                borderColor: selected === "temporary" ? T.accent : T.faint,
+                background: selected === "temporary" ? T.accent : "transparent",
+              }}>
+              {selected === "temporary" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+            </div>
+          </button>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-6 py-4"
+          style={{ borderTop: `1px solid ${T.border}` }}>
+          <button onClick={onCancel}
+            className="px-4 py-2 rounded-lg text-sm transition-colors"
+            style={{ color: T.muted, background: T.surfHover }}
+            onMouseEnter={e => (e.currentTarget.style.background = T.surfActive)}
+            onMouseLeave={e => (e.currentTarget.style.background = T.surfHover)}>
+            Cancel
+          </button>
+          <button
+            onClick={() => selected && onConfirm(selected === "temporary")}
+            disabled={!selected}
+            className="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
+            style={{
+              background: selected ? T.accent : T.faint,
+              color: selected ? T.accentText : T.bg,
+              cursor: selected ? "pointer" : "not-allowed",
+            }}
+            onMouseEnter={e => { if (selected) (e.currentTarget as HTMLElement).style.background = T.accentDark }}
+            onMouseLeave={e => { if (selected) (e.currentTarget as HTMLElement).style.background = T.accent }}
+          >
+            Upload
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   chatId: string | null
@@ -23,20 +132,70 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const [chatId, setChatId] = useState<string | null>(initId)
   const [streaming, setStreaming] = useState(false)
   const [streamText, setStreamText] = useState("")
-  const [sources, setSources] = useState<string[]>([])
-  const [panelOpen, setPanelOpen] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
+  const [uploading, setUploading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const { T } = useTheme()
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }) }, [msgs, streamText])
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [msgs, streamText])
+
+  async function handleUpload(temporary: boolean) {
+    if (!pendingFiles) return
+    const files = pendingFiles
+    setPendingFiles(null)
+    setUploading(true)
+
+    const uploadingId = Date.now().toString() + "_upload"
+    setMsgs(p => [...p, {
+      id: uploadingId,
+      role: "assistant",
+      content: `⏳ Uploading **${files.map(f => f.name).join(", ")}**…`,
+    }])
+
+    const uploaded: string[] = []
+    const failed: string[] = []
+
+    for (const f of files) {
+      const fd = new FormData()
+      fd.append("file", f)
+      fd.append("temporary", String(temporary))
+      if (chatId) fd.append("chatId", chatId)
+
+      try {
+        const r = await fetch("/api/upload", { method: "POST", body: fd })
+        const data = await r.json()
+        if (r.ok) uploaded.push(f.name)
+        else failed.push(`${f.name}: ${data.error}`)
+      } catch {
+        failed.push(`${f.name}: Upload failed`)
+      }
+    }
+
+    setUploading(false)
+
+    const lines = []
+    if (uploaded.length > 0) {
+      lines.push(`✅ **${uploaded.join(", ")}** uploaded successfully.`)
+      lines.push(temporary
+        ? "This file is only available in this chat. Ask me anything about it."
+        : "This file is saved to your Documents library and available in all chats. Ask me anything about it."
+      )
+    }
+    if (failed.length > 0) lines.push(`❌ Failed: ${failed.join(", ")}`)
+
+    setMsgs(p => p.map(m =>
+      m.id === uploadingId ? { ...m, content: lines.join("\n\n") } : m
+    ))
+  }
 
   async function send(text: string) {
     if (!text.trim() || streaming) return
     setMsgs(p => [...p, { id: Date.now().toString(), role: "user", content: text }])
     setStreaming(true)
     setStreamText("")
-    setSources([])
 
     try {
       const res = await fetch("/api/chat", {
@@ -49,6 +208,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       const reader = res.body!.getReader()
       const dec = new TextDecoder()
       let full = ""
+      let finalSources: string[] = []
 
       while (true) {
         const { done, value } = await reader.read()
@@ -64,19 +224,24 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
               full += ev.text
               setStreamText(full)
             } else if (ev.type === "done") {
-              setSources(ev.sources ?? [])
-              if (ev.sources?.length) setPanelOpen(true)
+              finalSources = ev.sources ?? []
             }
           } catch { }
         }
       }
 
-      setMsgs(p => [...p, { id: Date.now() + "_ai", role: "assistant", content: full, sources }])
+      setMsgs(p => [...p, {
+        id: Date.now() + "_ai",
+        role: "assistant",
+        content: full,
+        sources: finalSources,
+      }])
       setStreamText("")
     } catch (err: any) {
       setMsgs(p => [...p, {
-        id: Date.now() + "_err", role: "assistant",
-        content: `Error: ${err?.message ?? "Request failed"}. Check the terminal for details.`,
+        id: Date.now() + "_err",
+        role: "assistant",
+        content: `Sorry, something went wrong: ${err?.message ?? "Unknown error"}`,
       }])
       setStreamText("")
     } finally {
@@ -88,9 +253,17 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
   return (
     <div className="flex h-full overflow-hidden" style={{ background: T.bg }}>
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
 
-        {/* Messages */}
+      {pendingFiles && (
+        <StorageModal
+          files={pendingFiles}
+          T={T}
+          onConfirm={handleUpload}
+          onCancel={() => setPendingFiles(null)}
+        />
+      )}
+
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
         <div className="flex-1 overflow-y-auto" style={{ background: T.bg }}>
           {empty ? (
             <div className="flex flex-col items-center justify-center h-full px-6 py-12">
@@ -98,24 +271,13 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
                 style={{ background: `${T.accent}15`, border: `1px solid ${T.accent}30` }}>
                 <HardHat size={20} color={T.accent} />
               </div>
-              <h3 className="text-base font-semibold mb-1" style={{ color: T.text }}>
+              <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>
                 What can I help you estimate?
               </h3>
-              <p className="text-sm text-center max-w-sm mb-8" style={{ color: T.muted }}>
-                Ask anything about your past projects — costs, labor rates, materials, taxes, permits.
+              <p className="text-sm text-center max-w-md leading-relaxed" style={{ color: T.muted }}>
+                Ask anything about construction costs, labor rates, materials, permits, or taxes.
+                Use the 📎 button below to upload an Excel file and ask questions about it.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-xl">
-                {CHIPS.map(({ icon: Icon, text }) => (
-                  <button key={text} onClick={() => send(text)}
-                    className="flex items-start gap-3 px-4 py-3 rounded-xl text-left transition-colors"
-                    style={{ background: T.surface, border: `1px solid ${T.border}` }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = T.borderHover}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
-                    <Icon size={14} color={T.accent} className="mt-0.5 shrink-0" />
-                    <span className="text-sm" style={{ color: T.muted }}>{text}</span>
-                  </button>
-                ))}
-              </div>
             </div>
           ) : (
             <div className="max-w-3xl mx-auto px-4 py-6 space-y-0.5">
@@ -130,18 +292,19 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           )}
         </div>
 
-        {/* Input bar */}
         <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
           <div className="max-w-3xl mx-auto px-4 py-4">
-            <MessageInput onSend={send} disabled={streaming} />
+            <MessageInput
+              onSend={send}
+              onFilesSelected={setPendingFiles}
+              disabled={streaming || uploading}
+            />
             <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
-              Responses are based on internal company project data only.
+              Responses are based on uploaded data only. Esti-Mate AI can make mistakes. Check important info.
             </p>
           </div>
         </div>
       </div>
-
-      <ContextPanel open={panelOpen} onToggle={() => setPanelOpen(!panelOpen)} sources={sources} />
     </div>
   )
 }
