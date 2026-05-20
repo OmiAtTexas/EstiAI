@@ -15,18 +15,31 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user, account }) {
-      const domain = process.env.ALLOWED_EMAIL_DOMAIN
       if (!user.email) return false
-      // if (domain && !user.email.endsWith(`@${domain}`)) return "/login?error=domain"
-
-      // Allow sign in even if account not yet linked
+      const domain = process.env.ALLOWED_EMAIL_DOMAIN
+      if (domain && !user.email.endsWith(`@${domain}`)) return "/login?error=domain"
       if (account?.provider === "azure-ad") return true
       return true
     },
-    async session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id
-        session.user.role = (user as any).role ?? "estimator"
+    // jwt callback runs first — populate token with user data on first sign-in
+    async jwt({ token, user, account }) {
+      if (user) {
+        token.id = user.id
+        token.role = (user as any).role ?? "estimator"
+        token.email = user.email
+        token.name = user.name
+        token.picture = user.image
+      }
+      return token
+    },
+    // session callback — read from token (not user) since strategy is jwt
+    async session({ session, token }) {
+      if (session.user && token) {
+        session.user.id = token.id as string
+        session.user.role = token.role as string
+        session.user.email = token.email as string
+        session.user.name = token.name as string
+        session.user.image = token.picture as string
       }
       return session
     },
@@ -38,6 +51,12 @@ export const authOptions: NextAuthOptions = {
 
 declare module "next-auth" {
   interface Session {
-    user: { id: string; name?: string | null; email?: string | null; image?: string | null; role?: string }
+    user: {
+      id: string
+      name?: string | null
+      email?: string | null
+      image?: string | null
+      role?: string
+    }
   }
 }

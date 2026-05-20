@@ -1,58 +1,44 @@
-import Anthropic from "@anthropic-ai/sdk"
-import { embedText } from "./embeddings"
-import { searchChunks } from "./pinecone"
+import { GoogleGenerativeAI } from "@google/generative-ai"
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
-const SYSTEM = `You are EstimateAI — the internal cost intelligence assistant for a construction management consultancy. You help estimators instantly retrieve and compare data from the company's past project documents.
+const SYSTEM = `You are EstimateAI, the internal AI assistant for a construction cost management consultancy. You help estimators with questions about construction costs, labor rates, materials, taxes, permits, and project comparisons.
 
-RULES:
-- Answer ONLY from the project document context provided below each query.
-- Be direct and data-driven. Lead with numbers, not preamble.
-- When comparing across projects, always use a markdown table.
-- End every response with: *Sources: [document names]*
-- If the context doesn't contain enough information, say: "I couldn't find that in the uploaded project documents."
-- Never fabricate costs, rates, or figures.`
+When answering:
+- Be direct and data-driven
+- Use markdown tables when comparing data
+- Keep answers focused and useful for construction estimators
+- If asked about specific project data, let the user know they can upload documents via the Documents section`
 
 export type Msg = { role: "user" | "assistant"; content: string }
 
 export async function ragStream(userMessage: string, history: Msg[]) {
-  const embedding = await embedText(userMessage)
-  const chunks = await searchChunks(embedding, 6)
-  const sources = [...new Set(chunks.map((c) => c.documentName))]
-
-  const context =
-    chunks.length === 0
-      ? "No relevant project documents found. Ask the user to upload documents first."
-      : chunks
-          .map(
-            (c, i) =>
-              `[Doc ${i + 1}: ${c.documentName}${c.projectName ? ` — ${c.projectName}` : ""}${c.location ? ` (${c.location})` : ""}]\n${c.text}`
-          )
-          .join("\n\n---\n\n")
-
-  const messages: Anthropic.MessageParam[] = [
-    ...history.slice(-10).map((m) => ({ role: m.role, content: m.content })),
-    {
-      role: "user",
-      content: `RETRIEVED CONTEXT:\n${context}\n\nQUESTION: ${userMessage}`,
-    },
-  ]
-
-  const stream = await anthropic.messages.stream({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 2048,
-    system: SYSTEM,
-    messages,
+  const model = genAI.getGenerativeModel({
+    model: "models/gemini-2.5-flash",
+    systemInstruction: SYSTEM,
   })
 
+  const geminiHistory = history.slice(-10).map(m => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }))
+
+  const chat = model.startChat({
+    history: geminiHistory,
+    generationConfig: {
+      maxOutputTokens: 2048,
+      temperature: 0.3,
+    },
+  })
+
+  const result = await chat.sendMessageStream(userMessage)
+
   async function* tokens() {
-    for await (const ev of stream) {
-      if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
-        yield ev.delta.text
-      }
+    for await (const chunk of result.stream) {
+      const text = chunk.text()
+      if (text) yield text
     }
   }
 
-  return { tokens: tokens(), sources }
+  return { tokens: tokens(), sources: [] }
 }

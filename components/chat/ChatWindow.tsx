@@ -9,9 +9,9 @@ import { ContextPanel } from "@/components/layout/ContextPanel"
 
 const CHIPS = [
   { icon: FileBarChart2, text: "Summarize the cost breakdown from our uploaded project files" },
-  { icon: DollarSign,   text: "What were the labor and material costs in our recent projects?" },
-  { icon: Layers,       text: "Compare total project costs across all uploaded documents" },
-  { icon: MapPin,       text: "What permits and fees appear in our project files?" },
+  { icon: DollarSign, text: "What were the labor and material costs in our recent projects?" },
+  { icon: Layers, text: "Compare total project costs across all uploaded documents" },
+  { icon: MapPin, text: "What permits and fees appear in our project files?" },
 ]
 
 export function ChatWindow({ chatId: initId, messages: initMsgs }: {
@@ -65,16 +65,17 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
               setSources(ev.sources ?? [])
               if (ev.sources?.length) setPanelOpen(true)
             }
-          } catch {}
+          } catch { }
         }
       }
 
       setMsgs(p => [...p, { id: Date.now() + "_ai", role: "assistant", content: full, sources }])
       setStreamText("")
-    } catch {
+    } catch (err: any) {
+      console.error("Chat error:", err)
       setMsgs(p => [...p, {
         id: Date.now() + "_err", role: "assistant",
-        content: "Something went wrong. Please try again, or check that project documents have been uploaded.",
+        content: `Error: ${err?.message ?? "Request failed"}. Check the terminal for details.`,
       }])
       setStreamText("")
     } finally {
@@ -94,7 +95,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           {empty ? (
             <div className="flex flex-col items-center justify-center h-full px-6 py-12">
               <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
-                   style={{ background: "rgba(245,158,11,.1)", border: "1px solid rgba(245,158,11,.2)" }}>
+                style={{ background: "rgba(245,158,11,.1)", border: "1px solid rgba(245,158,11,.2)" }}>
                 <HardHat size={20} color="#f59e0b" />
               </div>
               <h2 className="text-base font-semibold mb-1" style={{ color: "#e8e8e8" }}>
@@ -106,10 +107,10 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-xl">
                 {CHIPS.map(({ icon: Icon, text }) => (
                   <button key={text} onClick={() => send(text)}
-                          className="flex items-start gap-3 px-4 py-3 rounded-xl text-left transition-colors"
-                          style={{ background: "#161b27", border: "1px solid rgba(255,255,255,.08)" }}
-                          onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(255,255,255,.14)"}
-                          onMouseLeave={e => e.currentTarget.style.borderColor = "rgba(255,255,255,.08)"}>
+                    className="flex items-start gap-3 px-4 py-3 rounded-xl text-left transition-colors"
+                    style={{ background: "#161b27", border: "1px solid rgba(255,255,255,.08)" }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(255,255,255,.14)"}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = "rgba(255,255,255,.08)"}>
                     <Icon size={14} color="#f59e0b" className="mt-0.5 shrink-0" />
                     <span className="text-sm" style={{ color: "#8b8fa8" }}>{text}</span>
                   </button>
