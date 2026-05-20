@@ -6,6 +6,7 @@ import { MessageBubble, type Message } from "./MessageBubble"
 import { MessageInput } from "./MessageInput"
 import { TypingIndicator } from "./TypingIndicator"
 import { ContextPanel } from "@/components/layout/ContextPanel"
+import { useTheme } from "@/components/layout/Sidebar"
 
 const CHIPS = [
   { icon: FileBarChart2, text: "Summarize the cost breakdown from our uploaded project files" },
@@ -26,6 +27,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const [panelOpen, setPanelOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const { T } = useTheme()
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }) }, [msgs, streamText])
 
@@ -72,7 +74,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       setMsgs(p => [...p, { id: Date.now() + "_ai", role: "assistant", content: full, sources }])
       setStreamText("")
     } catch (err: any) {
-      console.error("Chat error:", err)
       setMsgs(p => [...p, {
         id: Date.now() + "_err", role: "assistant",
         content: `Error: ${err?.message ?? "Request failed"}. Check the terminal for details.`,
@@ -86,33 +87,32 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const empty = msgs.length === 0 && !streaming
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Main chat column */}
+    <div className="flex h-full overflow-hidden" style={{ background: T.bg }}>
       <div className="flex-1 flex flex-col h-full overflow-hidden">
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" style={{ background: T.bg }}>
           {empty ? (
             <div className="flex flex-col items-center justify-center h-full px-6 py-12">
               <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
-                style={{ background: "rgba(245,158,11,.1)", border: "1px solid rgba(245,158,11,.2)" }}>
-                <HardHat size={20} color="#f59e0b" />
+                style={{ background: `${T.accent}15`, border: `1px solid ${T.accent}30` }}>
+                <HardHat size={20} color={T.accent} />
               </div>
-              <h2 className="text-base font-semibold mb-1" style={{ color: "#e8e8e8" }}>
+              <h3 className="text-base font-semibold mb-1" style={{ color: T.text }}>
                 What can I help you estimate?
-              </h2>
-              <p className="text-sm text-center max-w-sm mb-8" style={{ color: "#8b8fa8" }}>
+              </h3>
+              <p className="text-sm text-center max-w-sm mb-8" style={{ color: T.muted }}>
                 Ask anything about your past projects — costs, labor rates, materials, taxes, permits.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-xl">
                 {CHIPS.map(({ icon: Icon, text }) => (
                   <button key={text} onClick={() => send(text)}
                     className="flex items-start gap-3 px-4 py-3 rounded-xl text-left transition-colors"
-                    style={{ background: "#161b27", border: "1px solid rgba(255,255,255,.08)" }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(255,255,255,.14)"}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = "rgba(255,255,255,.08)"}>
-                    <Icon size={14} color="#f59e0b" className="mt-0.5 shrink-0" />
-                    <span className="text-sm" style={{ color: "#8b8fa8" }}>{text}</span>
+                    style={{ background: T.surface, border: `1px solid ${T.border}` }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = T.borderHover}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
+                    <Icon size={14} color={T.accent} className="mt-0.5 shrink-0" />
+                    <span className="text-sm" style={{ color: T.muted }}>{text}</span>
                   </button>
                 ))}
               </div>
@@ -131,17 +131,16 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         </div>
 
         {/* Input bar */}
-        <div className="shrink-0" style={{ borderTop: "1px solid rgba(255,255,255,.07)", background: "rgba(13,17,23,.8)" }}>
+        <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
           <div className="max-w-3xl mx-auto px-4 py-4">
             <MessageInput onSend={send} disabled={streaming} />
-            <p className="text-center text-[11px] mt-2" style={{ color: "#4a5068" }}>
+            <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
               Responses are based on internal company project data only.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Context panel */}
       <ContextPanel open={panelOpen} onToggle={() => setPanelOpen(!panelOpen)} sources={sources} />
     </div>
   )

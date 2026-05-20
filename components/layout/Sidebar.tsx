@@ -9,39 +9,65 @@ import { cn } from "@/lib/utils"
 type Chat = { id: string; title: string; updatedAt: string }
 type User = { name?: string | null; email?: string | null; image?: string | null }
 
+// Export theme so other components can use it
+export type Theme = typeof DARK_THEME
+export const DARK_THEME = {
+  bg: "#0d1117",
+  sidebar: "#111827",
+  surface: "#1a1f2e",
+  surfHover: "#1e2538",
+  surfActive: "#252d47",
+  border: "rgba(255,255,255,0.08)",
+  borderHover: "rgba(255,255,255,0.14)",
+  text: "#e8e8e8",
+  muted: "#8b8fa8",
+  faint: "#4a5068",
+  accent: "#22c55e",
+  accentDark: "#16a34a",
+  accentText: "#ffffff",
+}
+export const LIGHT_THEME = {
+  bg: "#ffffff",
+  sidebar: "#f0fdf4",
+  surface: "#f8faf8",
+  surfHover: "#eef7ee",
+  surfActive: "#dcfce7",
+  border: "rgba(0,0,0,0.08)",
+  borderHover: "rgba(0,0,0,0.14)",
+  text: "#111827",
+  muted: "#4b7a4b",
+  faint: "#86a886",
+  accent: "#16a34a",
+  accentDark: "#15803d",
+  accentText: "#ffffff",
+}
+
+// Global theme state — share across components via localStorage
+let _isDark = true
+const listeners: Array<(d: boolean) => void> = []
+export function getTheme() { return _isDark ? DARK_THEME : LIGHT_THEME }
+export function toggleGlobalTheme() {
+  _isDark = !_isDark
+  if (typeof window !== "undefined") localStorage.setItem("theme", _isDark ? "dark" : "light")
+  listeners.forEach(fn => fn(_isDark))
+}
+export function useTheme() {
+  const [isDark, setIsDark] = useState(_isDark)
+  useEffect(() => {
+    const saved = localStorage.getItem("theme")
+    if (saved) { _isDark = saved === "dark"; setIsDark(_isDark) }
+    listeners.push(setIsDark)
+    return () => { const i = listeners.indexOf(setIsDark); if (i > -1) listeners.splice(i, 1) }
+  }, [])
+  return { isDark, T: isDark ? DARK_THEME : LIGHT_THEME, toggle: toggleGlobalTheme }
+}
+
 export function Sidebar({ user }: { user: User }) {
   const [open, setOpen] = useState(true)
   const [chats, setChats] = useState<Chat[]>([])
-  const [isDark, setIsDark] = useState(true)
+  const { isDark, T, toggle } = useTheme()
   const pathname = usePathname()
   const router = useRouter()
-
-  // Theme tokens
-  const T = isDark ? {
-    sidebar: "#0f180f",
-    surface: "#131f13",
-    surfHover: "#1a2e1a",
-    surfActive: "#1f3a1f",
-    border: "rgba(255,255,255,0.07)",
-    text: "#e8f5e8",
-    muted: "#7ab87a",
-    faint: "#4a6a4a",
-    accent: "#22c55e",
-    accentText: "#0d120d",
-    bg: "#0d120d",
-  } : {
-    sidebar: "#f0f9f0",
-    surface: "#ffffff",
-    surfHover: "#eef7ee",
-    surfActive: "#e4f4e4",
-    border: "rgba(0,0,0,0.07)",
-    text: "#1a2e1a",
-    muted: "#4a7a4a",
-    faint: "#8aaa8a",
-    accent: "#16a34a",
-    accentText: "#ffffff",
-    bg: "#ffffff",
-  }
 
   useEffect(() => {
     fetch("/api/chats").then(r => r.json()).then(d => setChats(d.chats ?? []))
@@ -71,26 +97,28 @@ export function Sidebar({ user }: { user: User }) {
         {open && (
           <>
             <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-              style={{ background: `${T.accent}20`, border: `1px solid ${T.accent}40` }}>
+              style={{ background: `${T.accent}20`, border: `1px solid ${T.accent}35` }}>
               <HardHat size={14} color={T.accent} />
             </div>
             <span className="font-semibold text-sm flex-1" style={{ color: T.text }}>EstimateAI</span>
           </>
         )}
-        {/* Theme toggle */}
+        {/* Dark/Light toggle */}
         {open && (
           <button
-            onClick={() => setIsDark(!isDark)}
-            className="w-8 h-4 rounded-full relative transition-all shrink-0"
+            onClick={toggle}
+            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            className="relative w-9 h-5 rounded-full transition-all flex-shrink-0"
             style={{ background: isDark ? T.accent : T.surfActive, border: `1px solid ${T.border}` }}
-            title={isDark ? "Switch to light" : "Switch to dark"}
           >
-            <div className="w-3 h-3 rounded-full absolute top-0.5 transition-all"
+            <span className="absolute top-0.5 w-4 h-4 rounded-full transition-all flex items-center justify-center text-[9px]"
               style={{
-                background: isDark ? T.accentText : T.accent,
+                background: isDark ? "#fff" : T.accent,
                 left: isDark ? "auto" : "2px",
                 right: isDark ? "2px" : "auto",
-              }} />
+              }}>
+              {isDark ? "🌙" : "☀"}
+            </span>
           </button>
         )}
         <button onClick={() => setOpen(!open)}
@@ -108,8 +136,8 @@ export function Sidebar({ user }: { user: User }) {
           <button
             className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg font-semibold text-sm transition-all"
             style={{ background: T.accent, color: T.accentText, justifyContent: open ? "flex-start" : "center" }}
-            onMouseEnter={e => (e.currentTarget.style.filter = "brightness(0.9)")}
-            onMouseLeave={e => (e.currentTarget.style.filter = "brightness(1)")}
+            onMouseEnter={e => (e.currentTarget.style.background = T.accentDark)}
+            onMouseLeave={e => (e.currentTarget.style.background = T.accent)}
           >
             <Plus size={15} className="shrink-0" />
             {open && "New Chat"}
@@ -140,13 +168,11 @@ export function Sidebar({ user }: { user: User }) {
                   >
                     <MessageSquare size={13} className="shrink-0" style={{ color: T.faint }} />
                     <span className="text-xs flex-1 truncate">{c.title}</span>
-                    <button
-                      onClick={(e) => del(e, c.id)}
+                    <button onClick={(e) => del(e, c.id)}
                       className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all"
                       style={{ color: T.faint }}
                       onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
-                      onMouseLeave={e => (e.currentTarget.style.color = T.faint)}
-                    >
+                      onMouseLeave={e => (e.currentTarget.style.color = T.faint)}>
                       <Trash2 size={11} />
                     </button>
                   </div>
@@ -186,10 +212,8 @@ export function Sidebar({ user }: { user: User }) {
       <div className="px-2 pb-3 shrink-0 pt-2" style={{ borderTop: `1px solid ${T.border}` }}>
         <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
           style={{ justifyContent: open ? "flex-start" : "center" }}>
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
-            style={{ background: `${T.accent}20`, color: T.accent }}
-          >
+          <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold"
+            style={{ background: `${T.accent}20`, color: T.accent }}>
             {user.name?.[0]?.toUpperCase() ?? user.email?.[0]?.toUpperCase() ?? "?"}
           </div>
           {open && (
@@ -198,14 +222,12 @@ export function Sidebar({ user }: { user: User }) {
                 <p className="text-xs font-medium truncate" style={{ color: T.text }}>{user.name ?? "User"}</p>
                 <p className="text-[10px] truncate" style={{ color: T.faint }}>{user.email}</p>
               </div>
-              <button
-                onClick={() => signOut({ callbackUrl: "/login" })}
+              <button onClick={() => signOut({ callbackUrl: "/login" })}
                 className="p-1 rounded transition-colors"
                 style={{ color: T.faint }}
                 onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
                 onMouseLeave={e => (e.currentTarget.style.color = T.faint)}
-                title="Sign out"
-              >
+                title="Sign out">
                 <LogOut size={13} />
               </button>
             </>
