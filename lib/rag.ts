@@ -17,7 +17,9 @@ const DOCUMENT_KEYWORDS = [
   'project', 'cost', 'estimate', 'document', 'sheet', 'rate', 'material',
   'labor', 'permit', 'tax', 'price', 'budget', 'excel', 'file', 'data',
   'uploaded', 'invoice', 'quote', 'bid', 'scope', 'vendor', 'contract',
-  'summary', 'breakdown', 'total', 'amount', 'fee', 'expense', 'report'
+  'summary', 'breakdown', 'total', 'amount', 'fee', 'expense', 'report',
+  'workbook', 'tell', 'show', 'give', 'what', 'how much', 'about it',
+  'the file', 'uploaded file', 'my file', 'this file'
 ]
 
 export type Msg = { role: "user" | "assistant"; content: string }
@@ -38,8 +40,9 @@ export async function ragStream(userMessage: string, history: Msg[], chatId?: st
 
     const docs = allDocs.filter(d => {
       if (!d.document) return false
-      if (!d.document.temporary) return true
-      if (d.document.temporary && d.document.chatId === chatId) return true
+      if (!d.document.temporary) return true  // always include permanent docs
+      if (d.document.temporary && d.document.chatId === chatId) return true  // temp docs for this chat
+      if (d.document.temporary && d.document.chatId === null) return true  // temp docs uploaded before chat was created
       return false
     })
 
