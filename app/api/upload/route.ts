@@ -63,9 +63,9 @@ export async function POST(req: NextRequest) {
       }
       extractedText = sheets.join("\n\n")
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error("Excel parse error:", e)
-    return NextResponse.json({ error: "Could not parse Excel file. It may be corrupted or password-protected." }, { status: 400 })
+    return NextResponse.json({ error: e?.message ?? String(e) }, { status: 400 })
   }
 
   if (!extractedText.trim()) {
