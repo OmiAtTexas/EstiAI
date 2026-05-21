@@ -28,7 +28,7 @@ function LoginContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 transition-colors"
+    <div className="min-h-screen flex items-center justify-center p-4 transition-colors duration-500 ease-in-out"
       style={{ background: T.bg }}>
       <div className="fixed inset-0 pointer-events-none"
         style={{
@@ -39,20 +39,20 @@ function LoginContent() {
         <div className="flex justify-end mb-3">
           <button
             onClick={() => setIsDark(!isDark)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all duration-500 ease-in-out"
             style={{ background: T.card, border: `1px solid ${T.border}`, color: T.faint }}
           >
             {isDark ? "☀ Light" : "🌙 Dark"}
           </button>
         </div>
-        <div className="rounded-2xl p-8" style={{ background: T.card, border: `1px solid ${T.border}` }}>
+        <div className="rounded-2xl p-8 transition-all duration-500 ease-in-out" style={{ background: T.card, border: `1px solid ${T.border}` }}>
           <div className="flex flex-col items-center mb-8">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3"
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-colors duration-500 ease-in-out"
               style={{ background: `${T.accent}15`, border: `1px solid ${T.accent}30` }}>
-              <HardHat size={22} color={T.accent} />
+              <HardHat size={22} color={T.accent} className="transition-colors duration-500 ease-in-out" />
             </div>
-            <h1 className="text-lg font-semibold" style={{ color: T.text }}> Your Esti-MateAI</h1>
-            <p className="text-xs mt-1" style={{ color: T.muted }}>Cost Intelligence Platform</p>
+            <h1 className="text-lg font-semibold transition-colors duration-500 ease-in-out" style={{ color: T.text }}> Your Esti-MateAI</h1>
+            <p className="text-xs mt-1 transition-colors duration-500 ease-in-out" style={{ color: T.muted }}>Cost Intelligence Platform</p>
           </div>
           {errMsg && (
             <div className="mb-5 rounded-lg px-4 py-3 text-sm text-center"
@@ -62,7 +62,7 @@ function LoginContent() {
           )}
           <button
             onClick={() => signIn("azure-ad", { callbackUrl: "/chat" })}
-            className="w-full flex items-center justify-center gap-3 py-3 rounded-xl font-semibold text-sm transition-all"
+            className="w-full flex items-center justify-center gap-3 py-3 rounded-xl font-semibold text-sm transition-all duration-500 ease-in-out"
             style={{ background: T.accent, color: T.accentText }}
             onMouseEnter={e => (e.currentTarget.style.filter = "brightness(0.9)")}
             onMouseLeave={e => (e.currentTarget.style.filter = "brightness(1)")}
@@ -75,12 +75,12 @@ function LoginContent() {
             </svg>
             Sign in with Microsoft
           </button>
-          <p className="text-center text-xs mt-5" style={{ color: T.faint }}>
-            Access restricted to <span style={{ color: T.muted }}>company domain only</span>
+          <p className="text-center text-xs mt-5 transition-colors duration-500 ease-in-out" style={{ color: T.faint }}>
+            Access restricted to <span className="transition-colors duration-500 ease-in-out" style={{ color: T.muted }}>company domain only</span>
           </p>
         </div>
-        <p className="text-center text-xs mt-4" style={{ color: T.faint }}>
-          Powered for <span style={{ color: T.muted }}>Your Company</span> · Internal use only
+        <p className="text-center text-xs mt-4 transition-colors duration-500 ease-in-out" style={{ color: T.faint }}>
+          Powered for <span className="transition-colors duration-500 ease-in-out" style={{ color: T.muted }}>O' CONNOR MANAGEMENT</span> · Internal use only
         </p>
       </div>
     </div>
