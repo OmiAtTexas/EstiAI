@@ -32,10 +32,10 @@ export function MessageInput({
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []).filter(f =>
-      f.name.toLowerCase().match(/\.(xlsx?|xls|csv)$/)
+      f.name.toLowerCase().match(/\.(xlsm|xlsx|xls|csv)$/)
     )
     if (files.length === 0) {
-      alert("Only Excel files (.xlsx, .xls, .csv) are supported.")
+      alert("Only Excel files (.xlsx, .xlsm, .xls, .csv) are supported.")
       return
     }
     onFilesSelected(files)
@@ -57,7 +57,7 @@ export function MessageInput({
         ref={fileRef}
         type="file"
         multiple
-        accept=".xlsx,.xls,.csv"
+        accept=".xlsx,.xlsm,.xls,.csv"
         className="hidden"
         onChange={handleFileChange}
       />

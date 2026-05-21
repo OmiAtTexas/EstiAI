@@ -42,7 +42,7 @@ export default function DocumentsPage() {
   // Documents page = always permanent, no modal
   async function upload(files: FileList | File[]) {
     const arr = Array.from(files).filter(f =>
-      f.name.toLowerCase().match(/\.(xlsx?|xlsm|xls|csv)$/)
+      f.name.toLowerCase().match(/\.(xlsm|xlsx|xls|csv)$/)
     )
     if (arr.length === 0) {
       alert("Only Excel files (.xlsx, .xls, .csv) are supported.")
