@@ -51,7 +51,7 @@ function LoginContent() {
               style={{ background: `${T.accent}15`, border: `1px solid ${T.accent}30` }}>
               <HardHat size={22} color={T.accent} />
             </div>
-            <h1 className="text-lg font-semibold" style={{ color: T.text }}>EstimateAI</h1>
+            <h1 className="text-lg font-semibold" style={{ color: T.text }}> Your Esti-MateAI</h1>
             <p className="text-xs mt-1" style={{ color: T.muted }}>Cost Intelligence Platform</p>
           </div>
           {errMsg && (
@@ -76,11 +76,11 @@ function LoginContent() {
             Sign in with Microsoft
           </button>
           <p className="text-center text-xs mt-5" style={{ color: T.faint }}>
-            Access restricted to <span style={{ color: T.muted }}>@yourcompany.com</span>
+            Access restricted to <span style={{ color: T.muted }}>company domain only</span>
           </p>
         </div>
         <p className="text-center text-xs mt-4" style={{ color: T.faint }}>
-          Powered by <span style={{ color: T.muted }}>Claude AI</span> · Internal use only
+          Powered for <span style={{ color: T.muted }}>Your Company</span> · Internal use only
         </p>
       </div>
     </div>
