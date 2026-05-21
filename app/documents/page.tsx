@@ -1,4 +1,6 @@
 "use client"
+import { CompareButton } from "@/components/CompareModal"
+import { DocumentPreviewButton } from "@/components/DocumentPreview"
 import { useState, useEffect, useCallback } from "react"
 import { Upload, FileText, Trash2, AlertCircle, CheckCircle2, Clock, RefreshCw } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"

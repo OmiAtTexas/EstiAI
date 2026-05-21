@@ -3,7 +3,52 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
+/* ── Theme variables ─────────────────────────────────────────── */
+:root {
+    --bg: #0d1117;
+    --sidebar: #111827;
+    --surface: #1a1f2e;
+    --surf-hover: #1e2538;
+    --surf-active: #252d47;
+    --border: rgba(255, 255, 255, 0.08);
+    --border-hover: rgba(255, 255, 255, 0.14);
+    --text: #e8e8e8;
+    --muted: #8b8fa8;
+    --faint: #4a5068;
+    --accent: #22c55e;
+    --accent-dark: #16a34a;
+    --accent-text: #ffffff;
+}
+
+:root.light {
+    --bg: #ffffff;
+    --sidebar: #f0fdf4;
+    --surface: #f8faf8;
+    --surf-hover: #eef7ee;
+    --surf-active: #dcfce7;
+    --border: rgba(0, 0, 0, 0.08);
+    --border-hover: rgba(0, 0, 0, 0.14);
+    --text: #111827;
+    --muted: #4b7a4b;
+    --faint: #86a886;
+    --accent: #16a34a;
+    --accent-dark: #15803d;
+    --accent-text: #ffffff;
+}
+
+/* ── Smooth theme transition ─────────────────────────────────── */
+*,
+*::before,
+*::after {
+    transition-property: background-color, color, border-color, fill, stroke;
+    transition-duration: 0.25s;
+    transition-timing-function: ease;
+}
+
+/* Don't animate things that shouldn't animate */
+*,
+*::before,
+*::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
@@ -11,12 +56,12 @@
 
 html,
 body {
-    background: #0d1117;
-    color: #e8e8e8;
+    background: var(--bg);
+    color: var(--text);
     font-family: 'DM Sans', system-ui, sans-serif;
-    @apply transition-colors duration-300 ease-in-out;
 }
 
+/* ── Scrollbar ───────────────────────────────────────────────── */
 ::-webkit-scrollbar {
     width: 4px;
 }
@@ -26,11 +71,11 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #252d47;
+    background: var(--surf-active);
     border-radius: 2px;
 }
 
-/* Markdown styles — color values come from inline styles via theme */
+/* ── Markdown ────────────────────────────────────────────────── */
 .md-wrap p {
     margin-bottom: .55rem;
     line-height: 1.65;
@@ -83,12 +128,12 @@ body {
     padding: .1em .35em;
     font-family: 'JetBrains Mono', monospace;
     font-size: .82em;
-    color: #22c55e;
+    color: var(--accent);
 }
 
 .md-wrap pre {
     background: #090d14;
-    border: 1px solid rgba(255, 255, 255, .08);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: .75rem 1rem;
     overflow-x: auto;
@@ -110,29 +155,30 @@ body {
 
 .md-wrap th {
     background: rgba(34, 197, 94, .12);
-    color: #22c55e;
+    color: var(--accent);
     font-weight: 600;
     text-align: left;
     padding: .35rem .6rem;
-    border: 1px solid rgba(255, 255, 255, .07);
+    border: 1px solid var(--border-hover);
 }
 
 .md-wrap td {
     padding: .32rem .6rem;
-    border: 1px solid rgba(255, 255, 255, .06);
+    border: 1px solid var(--border);
 }
 
 .md-wrap tr:nth-child(even) td {
-    background: rgba(255, 255, 255, .025);
+    background: rgba(34, 197, 94, .03);
 }
 
 .md-wrap blockquote {
-    border-left: 2px solid #22c55e;
+    border-left: 2px solid var(--accent);
     padding-left: .6rem;
     opacity: .8;
     margin: .4rem 0;
 }
 
+/* ── Animations ──────────────────────────────────────────────── */
 @keyframes dot {
 
     0%,
@@ -182,4 +228,33 @@ body {
 
 .animate-fadein {
     animation: fadein .2s ease-out;
+}
+
+/* Disable transition on page load to prevent flash */
+.no-transition * {
+    transition: none !important;
+}
+
+/* ── Skeleton pulse animation ────────────────────────────────── */
+@keyframes skeleton-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+    }
+}
+
+/* ── Mobile responsive ───────────────────────────────────────── */
+@media (max-width: 768px) {
+    .sidebar-mobile-hidden {
+        display: none !important;
+    }
+
+    .mobile-full {
+        width: 100% !important;
+    }
 }
