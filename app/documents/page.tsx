@@ -123,7 +123,7 @@ export default function DocumentsPage() {
             id="fi"
             type="file"
             multiple
-            accept=".xlsx,.xls,.csv"
+            accept=".xlsx,.xlsm,.xls,.csv"
             className="hidden"
             onChange={e => e.target.files && upload(e.target.files)}
           />

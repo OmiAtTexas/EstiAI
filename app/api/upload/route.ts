@@ -18,25 +18,31 @@ export async function POST(req: NextRequest) {
 
   if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 })
 
-  // Only Excel allowed
   const name = file.name.toLowerCase()
-  if (!name.match(/\.(xlsx?|xls|csv)$/)) {
+  if (!name.match(/\.(xlsx?|xlsm|xls|csv)$/)) {
     return NextResponse.json({
-      error: "Only Excel files (.xlsx, .xls, .csv) are supported."
+      error: "Only Excel files (.xlsx, .xlsm, .xls, .csv) are supported."
     }, { status: 400 })
   }
 
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
 
-  // Save to local public/uploads folder
-  const uploadDir = path.join(process.cwd(), "public", "uploads")
-  await mkdir(uploadDir, { recursive: true })
-  const fileName = `${Date.now()}_${file.name.replace(/\s+/g, "_")}`
-  const filePath = path.join(uploadDir, fileName)
-  await writeFile(filePath, buffer)
+  // Save to /tmp (works on both local and Vercel)
+  // If that fails we continue anyway since we only need the parsed content
+  let savedUrl = `/uploads/${Date.now()}_${file.name.replace(/\s+/g, "_")}`
+  try {
+    const uploadDir = process.env.NODE_ENV === "production"
+      ? "/tmp/uploads"
+      : path.join(process.cwd(), "public", "uploads")
+    await mkdir(uploadDir, { recursive: true })
+    await writeFile(path.join(uploadDir, path.basename(savedUrl)), buffer)
+  } catch {
+    // File save failed — that's ok, we store content in DB anyway
+    savedUrl = `/tmp/${Date.now()}_${file.name}`
+  }
 
-  // Parse Excel content
+  // Parse Excel/CSV content
   let extractedText = ""
   try {
     const workbook = XLSX.read(buffer, { type: "buffer" })
@@ -58,13 +64,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Excel file appears to be empty." }, { status: 400 })
   }
 
-  // Save document record
+  // Save document record to DB
   const doc = await db.document.create({
     data: {
       name: file.name,
       projectName: projectName || file.name.replace(/\.[^.]+$/, ""),
       location,
-      blobUrl: `/uploads/${fileName}`,
+      blobUrl: savedUrl,
       fileType: "excel",
       fileSize: file.size,
       status: "ready",
