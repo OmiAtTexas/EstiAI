@@ -219,7 +219,13 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
             const ev = JSON.parse(line.slice(6))
             if (ev.type === "init") {
               setChatId(ev.chatId)
-              if (!initId) router.replace(`/chat/${ev.chatId}`, { scroll: false })
+
+              // FIX IS HERE: We use replaceState instead of router.replace
+              // This changes the URL to the new chat ID without forcing the component to unmount!
+              if (!initId) {
+                window.history.replaceState(null, "", `/chat/${ev.chatId}`)
+              }
+
             } else if (ev.type === "token") {
               full += ev.text
               setStreamText(full)
