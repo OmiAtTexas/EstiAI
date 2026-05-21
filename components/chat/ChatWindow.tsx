@@ -167,11 +167,12 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
       try {
         const r = await fetch("/api/upload", { method: "POST", body: fd })
-        const data = await r.json()
+        let data: any = {}
+        try { data = await r.json() } catch { }
         if (r.ok) uploaded.push(f.name)
-        else failed.push(`${f.name}: ${data.error}`)
-      } catch {
-        failed.push(`${f.name}: Upload failed`)
+        else failed.push(`${f.name}: ${data.error ?? `Server error ${r.status}`}`)
+      } catch (err: any) {
+        failed.push(`${f.name}: ${err?.message ?? "Network error"}`)
       }
     }
 
