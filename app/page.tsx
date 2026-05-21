@@ -140,7 +140,7 @@ export default function LandingPage() {
 
             {/* Footer */}
             <div className="text-center py-6 text-xs" style={{ color: T.faint, borderTop: `1px solid ${T.border}` }}>
-                EstimateAI · Internal platform · Powered by Claude AI
+                EstimateAI · Internal platform · Powered for your company
             </div>
         </div>
     )
