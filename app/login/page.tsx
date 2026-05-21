@@ -80,7 +80,7 @@ function LoginContent() {
           </p>
         </div>
         <p className="text-center text-xs mt-4 transition-colors duration-500 ease-in-out" style={{ color: T.faint }}>
-          Powered for <span className="transition-colors duration-500 ease-in-out" style={{ color: T.muted }}>O' CONNOR MANAGEMENT</span> · Internal use only
+          Powered for <span className="transition-colors duration-500 ease-in-out" style={{ color: T.muted }}>your company</span> · Internal use only
         </p>
       </div>
     </div>
