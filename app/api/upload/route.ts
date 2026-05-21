@@ -5,6 +5,11 @@ import * as XLSX from "xlsx"
 
 export const maxDuration = 30 // extend timeout for large files
 
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+}
 export async function POST(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
