@@ -16,22 +16,22 @@ function StorageModal({ files, T, onConfirm, onCancel }: {
   const [selected, setSelected] = useState<"permanent" | "temporary" | null>(null)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 transition-colors duration-300 ease-in-out"
       style={{ background: "rgba(0,0,0,0.65)" }}>
-      <div className="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl"
+      <div className="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl transition-colors duration-300 ease-in-out"
         style={{ background: T.surface, border: `1px solid ${T.borderHover}` }}>
 
-        <div className="flex items-center justify-between px-6 py-4"
+        <div className="flex items-center justify-between px-6 py-4 transition-colors duration-300 ease-in-out"
           style={{ borderBottom: `1px solid ${T.border}` }}>
           <div>
-            <h2 className="text-base font-semibold" style={{ color: T.text }}>
+            <h2 className="text-base font-semibold transition-colors duration-300 ease-in-out" style={{ color: T.text }}>
               How do you want to store this?
             </h2>
-            <p className="text-xs mt-0.5" style={{ color: T.faint }}>
+            <p className="text-xs mt-0.5 transition-colors duration-300 ease-in-out" style={{ color: T.faint }}>
               {files.length === 1 ? files[0].name : `${files.length} files selected`}
             </p>
           </div>
-          <button onClick={onCancel} className="p-1.5 rounded-lg transition-colors"
+          <button onClick={onCancel} className="p-1.5 rounded-lg transition-colors duration-300 ease-in-out"
             style={{ color: T.faint }}
             onMouseEnter={e => (e.currentTarget.style.background = T.surfHover)}
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
@@ -42,23 +42,23 @@ function StorageModal({ files, T, onConfirm, onCancel }: {
         <div className="p-6 space-y-3">
           <button
             onClick={() => setSelected("permanent")}
-            className="w-full flex items-start gap-4 p-4 rounded-xl text-left transition-all"
+            className="w-full flex items-start gap-4 p-4 rounded-xl text-left transition-all duration-300 ease-in-out"
             style={{
               background: selected === "permanent" ? `${T.accent}12` : T.surfHover,
               border: `2px solid ${selected === "permanent" ? T.accent : T.border}`,
             }}
           >
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition-colors duration-300 ease-in-out"
               style={{ background: `${T.accent}20` }}>
               <Database size={16} color={T.accent} />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold" style={{ color: T.text }}>Save permanently</p>
-              <p className="text-xs mt-0.5 leading-relaxed" style={{ color: T.muted }}>
+              <p className="text-sm font-semibold transition-colors duration-300 ease-in-out" style={{ color: T.text }}>Save permanently</p>
+              <p className="text-xs mt-0.5 leading-relaxed transition-colors duration-300 ease-in-out" style={{ color: T.muted }}>
                 Saved to your Documents library. Available in all future chats. Delete anytime.
               </p>
             </div>
-            <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-1"
+            <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 transition-colors duration-300 ease-in-out"
               style={{
                 borderColor: selected === "permanent" ? T.accent : T.faint,
                 background: selected === "permanent" ? T.accent : "transparent",
@@ -69,7 +69,7 @@ function StorageModal({ files, T, onConfirm, onCancel }: {
 
           <button
             onClick={() => setSelected("temporary")}
-            className="w-full flex items-start gap-4 p-4 rounded-xl text-left transition-all"
+            className="w-full flex items-start gap-4 p-4 rounded-xl text-left transition-all duration-300 ease-in-out"
             style={{
               background: selected === "temporary" ? `${T.accent}12` : T.surfHover,
               border: `2px solid ${selected === "temporary" ? T.accent : T.border}`,
@@ -80,12 +80,12 @@ function StorageModal({ files, T, onConfirm, onCancel }: {
               <MessageSquare size={16} color="#818cf8" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold" style={{ color: T.text }}>This chat only</p>
-              <p className="text-xs mt-0.5 leading-relaxed" style={{ color: T.muted }}>
+              <p className="text-sm font-semibold transition-colors duration-300 ease-in-out" style={{ color: T.text }}>This chat only</p>
+              <p className="text-xs mt-0.5 leading-relaxed transition-colors duration-300 ease-in-out" style={{ color: T.muted }}>
                 Only used in this chat. Not saved to Documents. Removed when this chat is deleted.
               </p>
             </div>
-            <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-1"
+            <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 transition-colors duration-300 ease-in-out"
               style={{
                 borderColor: selected === "temporary" ? T.accent : T.faint,
                 background: selected === "temporary" ? T.accent : "transparent",
@@ -95,10 +95,10 @@ function StorageModal({ files, T, onConfirm, onCancel }: {
           </button>
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4"
+        <div className="flex items-center justify-end gap-3 px-6 py-4 transition-colors duration-300 ease-in-out"
           style={{ borderTop: `1px solid ${T.border}` }}>
           <button onClick={onCancel}
-            className="px-4 py-2 rounded-lg text-sm transition-colors"
+            className="px-4 py-2 rounded-lg text-sm transition-colors duration-300 ease-in-out"
             style={{ color: T.muted, background: T.surfHover }}
             onMouseEnter={e => (e.currentTarget.style.background = T.surfActive)}
             onMouseLeave={e => (e.currentTarget.style.background = T.surfHover)}>
@@ -107,7 +107,7 @@ function StorageModal({ files, T, onConfirm, onCancel }: {
           <button
             onClick={() => selected && onConfirm(selected === "temporary")}
             disabled={!selected}
-            className="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
+            className="px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ease-in-out"
             style={{
               background: selected ? T.accent : T.faint,
               color: selected ? T.accentText : T.bg,
@@ -252,7 +252,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const empty = msgs.length === 0 && !streaming
 
   return (
-    <div className="flex h-full overflow-hidden" style={{ background: T.bg }}>
+    <div className="flex h-full overflow-hidden transition-colors duration-300 ease-in-out" style={{ background: T.bg }}>
 
       {pendingFiles && (
         <StorageModal
@@ -264,17 +264,17 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       )}
 
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="flex-1 overflow-y-auto" style={{ background: T.bg }}>
+        <div className="flex-1 overflow-y-auto transition-colors duration-300 ease-in-out" style={{ background: T.bg }}>
           {empty ? (
             <div className="flex flex-col items-center justify-center h-full px-6 py-12">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4 transition-colors duration-300 ease-in-out"
                 style={{ background: `${T.accent}15`, border: `1px solid ${T.accent}30` }}>
                 <HardHat size={20} color={T.accent} />
               </div>
-              <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>
+              <h3 className="text-base font-semibold mb-2 transition-colors duration-300 ease-in-out" style={{ color: T.text }}>
                 What can I help you estimate?
               </h3>
-              <p className="text-sm text-center max-w-md leading-relaxed" style={{ color: T.muted }}>
+              <p className="text-sm text-center max-w-md leading-relaxed transition-colors duration-300 ease-in-out" style={{ color: T.muted }}>
                 Ask anything about construction costs, labor rates, materials, permits, or taxes.
                 Use the 📎 button below to upload an Excel file and ask questions about it.
               </p>
@@ -292,14 +292,14 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           )}
         </div>
 
-        <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
+        <div className="shrink-0 transition-colors duration-300 ease-in-out" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
           <div className="max-w-3xl mx-auto px-4 py-4">
             <MessageInput
               onSend={send}
               onFilesSelected={setPendingFiles}
               disabled={streaming || uploading}
             />
-            <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
+            <p className="text-center text-[11px] mt-2 transition-colors duration-300 ease-in-out" style={{ color: T.faint }}>
               Responses are based on uploaded data only. Esti-Mate AI can make mistakes. Check important info.
             </p>
           </div>
