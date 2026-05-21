@@ -176,7 +176,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
     setUploading(false)
 
-    const lines = []
+    const lines: string[] = []
     if (uploaded.length > 0) {
       lines.push(`✅ **${uploaded.join(", ")}** uploaded successfully.`)
       lines.push(temporary
