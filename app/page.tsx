@@ -88,7 +88,7 @@ export default function LandingPage() {
                 </div>
 
                 <p className="text-xs mt-4" style={{ color: T.faint }}>
-                    Restricted to @yourcompany.com emails only
+                    Restricted to @yourcompany emails only
                 </p>
             </div>
 
