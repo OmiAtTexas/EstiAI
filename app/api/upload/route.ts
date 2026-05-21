@@ -2,14 +2,20 @@ import { NextRequest, NextResponse } from "next/server"
 import { getToken } from "next-auth/jwt"
 import { db } from "@/lib/db"
 import * as XLSX from "xlsx"
-import { writeFile, mkdir } from "fs/promises"
-import path from "path"
+
+export const maxDuration = 30 // extend timeout for large files
 
 export async function POST(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const form = await req.formData()
+  let form: FormData
+  try {
+    form = await req.formData()
+  } catch {
+    return NextResponse.json({ error: "Could not parse form data. File may be too large." }, { status: 400 })
+  }
+
   const file = form.get("file") as File
   const projectName = (form.get("projectName") as string) || undefined
   const location = (form.get("location") as string) || undefined
@@ -19,58 +25,60 @@ export async function POST(req: NextRequest) {
   if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 })
 
   const name = file.name.toLowerCase()
-  if (!name.match(/\.(xlsx?|xlsm|xls|csv)$/)) {
+  if (!name.match(/\.(xlsm|xlsx|xls|csv)$/)) {
     return NextResponse.json({
       error: "Only Excel files (.xlsx, .xlsm, .xls, .csv) are supported."
+    }, { status: 400 })
+  }
+
+  // Check file size — Vercel limit is 4.5MB
+  if (file.size > 4 * 1024 * 1024) {
+    return NextResponse.json({
+      error: "File too large. Maximum size is 4MB. Please reduce the file size and try again."
     }, { status: 400 })
   }
 
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
 
-  // Save to /tmp (works on both local and Vercel)
-  // If that fails we continue anyway since we only need the parsed content
-  let savedUrl = `/uploads/${Date.now()}_${file.name.replace(/\s+/g, "_")}`
-  try {
-    const uploadDir = process.env.NODE_ENV === "production"
-      ? "/tmp/uploads"
-      : path.join(process.cwd(), "public", "uploads")
-    await mkdir(uploadDir, { recursive: true })
-    await writeFile(path.join(uploadDir, path.basename(savedUrl)), buffer)
-  } catch {
-    // File save failed — that's ok, we store content in DB anyway
-    savedUrl = `/tmp/${Date.now()}_${file.name}`
-  }
-
-  // Parse Excel/CSV content
+  // Parse Excel/CSV content — no file saving needed
   let extractedText = ""
   try {
-    const workbook = XLSX.read(buffer, { type: "buffer" })
-    const sheets: string[] = []
-    for (const sheetName of workbook.SheetNames) {
-      const sheet = workbook.Sheets[sheetName]
-      const csv = XLSX.utils.sheet_to_csv(sheet)
-      if (csv.trim()) {
-        sheets.push(`=== Sheet: ${sheetName} ===\n${csv}`)
+    if (name.endsWith(".csv")) {
+      extractedText = buffer.toString("utf-8")
+    } else {
+      const workbook = XLSX.read(buffer, {
+        type: "buffer",
+        bookVBA: false,
+        cellNF: false,
+        cellHTML: false,
+      })
+      const sheets: string[] = []
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName]
+        const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false })
+        if (csv.trim()) {
+          sheets.push(`=== Sheet: ${sheetName} ===\n${csv}`)
+        }
       }
+      extractedText = sheets.join("\n\n")
     }
-    extractedText = sheets.join("\n\n")
   } catch (e) {
     console.error("Excel parse error:", e)
-    return NextResponse.json({ error: "Could not parse Excel file." }, { status: 400 })
+    return NextResponse.json({ error: "Could not parse Excel file. It may be corrupted or password-protected." }, { status: 400 })
   }
 
   if (!extractedText.trim()) {
     return NextResponse.json({ error: "Excel file appears to be empty." }, { status: 400 })
   }
 
-  // Save document record to DB
+  // Save document record — no local file, content stored in DB
   const doc = await db.document.create({
     data: {
       name: file.name,
       projectName: projectName || file.name.replace(/\.[^.]+$/, ""),
       location,
-      blobUrl: savedUrl,
+      blobUrl: `db://${Date.now()}_${file.name}`, // placeholder, content is in DB
       fileType: "excel",
       fileSize: file.size,
       status: "ready",
@@ -81,7 +89,6 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  // Save extracted content for RAG
   await db.documentContent.create({
     data: { documentId: doc.id, content: extractedText },
   })
