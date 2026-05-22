@@ -3,7 +3,8 @@ import { getToken } from "next-auth/jwt"
 import { db } from "@/lib/db"
 import * as XLSX from "xlsx"
 
-export const maxDuration = 30 // extend timeout for large files
+
+export const maxDuration = 60 // extend timeout for large files
 
 export const config = {
   api: {
