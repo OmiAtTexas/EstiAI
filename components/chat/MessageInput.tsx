@@ -1,7 +1,8 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
-import { ArrowUp, Paperclip } from "lucide-react"
+import { ArrowUp, Paperclip, Loader2 } from "lucide-react"
 import { useTheme } from "@/components/layout/Sidebar"
+import { compressExcelFile } from "@/lib/compressFile"
 
 export function MessageInput({
   onSend,
@@ -14,6 +15,7 @@ export function MessageInput({
 }) {
   const [val, setVal] = useState("")
   const [focused, setFocused] = useState(false)
+  const [compressing, setCompressing] = useState(false)
   const textRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const { T } = useTheme()
@@ -30,19 +32,33 @@ export function MessageInput({
     setVal("")
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []).filter(f =>
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const rawFiles = Array.from(e.target.files ?? []).filter(f =>
       f.name.toLowerCase().match(/\.(xlsm|xlsx|xls|csv)$/)
     )
-    if (files.length === 0) {
+    if (rawFiles.length === 0) {
       alert("Only Excel files (.xlsx, .xlsm, .xls, .csv) are supported.")
       return
     }
-    onFilesSelected(files)
-    e.target.value = "" // reset so same file can be re-uploaded
+
+    setCompressing(true)
+    const processedFiles: File[] = []
+
+    for (const f of rawFiles) {
+      const { file, wasCompressed } = await compressExcelFile(f)
+      if (wasCompressed) {
+        console.log(`${f.name}: compressed from ${(f.size / 1024 / 1024).toFixed(1)}MB to ${(file.size / 1024).toFixed(0)}KB`)
+      }
+      processedFiles.push(file)
+    }
+
+    setCompressing(false)
+    onFilesSelected(processedFiles)
+    e.target.value = ""
   }
 
-  const canSend = !!val.trim() && !disabled
+  const canSend = !!val.trim() && !disabled && !compressing
+  const isDisabled = disabled || compressing
 
   return (
     <div
@@ -52,7 +68,6 @@ export function MessageInput({
         border: `1px solid ${focused ? T.accent + "60" : T.border}`,
       }}
     >
-      {/* Hidden file input — Excel only */}
       <input
         ref={fileRef}
         type="file"
@@ -62,19 +77,19 @@ export function MessageInput({
         onChange={handleFileChange}
       />
 
-      {/* Paperclip button — opens file picker */}
       <button
         className="p-1.5 shrink-0 mb-0.5 transition-colors rounded-md"
-        style={{ color: T.faint }}
-        onClick={() => fileRef.current?.click()}
-        title="Attach Excel file (.xlsx, .xls, .csv)"
-        onMouseEnter={e => (e.currentTarget.style.color = T.accent)}
-        onMouseLeave={e => (e.currentTarget.style.color = T.faint)}
+        style={{ color: compressing ? T.accent : T.faint }}
+        onClick={() => !compressing && fileRef.current?.click()}
+        title={compressing ? "Compressing file..." : "Attach Excel file"}
+        disabled={compressing}
       >
-        <Paperclip size={15} />
+        {compressing
+          ? <Loader2 size={15} className="animate-spin" />
+          : <Paperclip size={15} />
+        }
       </button>
 
-      {/* Text input */}
       <textarea
         ref={textRef}
         value={val}
@@ -87,14 +102,13 @@ export function MessageInput({
         }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        disabled={disabled}
+        disabled={isDisabled}
         rows={1}
-        placeholder="Ask about project costs, labor rates, permits…"
+        placeholder={compressing ? "Compressing file..." : "Ask about project costs, labor rates, permits…"}
         className="flex-1 bg-transparent resize-none text-sm leading-relaxed focus:outline-none py-1 min-h-[28px]"
         style={{ color: T.text, caretColor: T.accent }}
       />
 
-      {/* Send button */}
       <button
         onClick={submit}
         disabled={!canSend}

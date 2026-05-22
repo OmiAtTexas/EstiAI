@@ -3,14 +3,8 @@ import { getToken } from "next-auth/jwt"
 import { db } from "@/lib/db"
 import * as XLSX from "xlsx"
 
+export const maxDuration = 60
 
-export const maxDuration = 60 // extend timeout for large files
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-}
 export async function POST(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -31,33 +25,39 @@ export async function POST(req: NextRequest) {
   if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 })
 
   const name = file.name.toLowerCase()
-  if (!name.match(/\.(xlsm|xlsx|xls|csv)$/)) {
+  const isExcel = name.match(/\.(xlsm|xlsx|xls|csv)$/)
+  if (!isExcel) {
     return NextResponse.json({
       error: "Only Excel files (.xlsx, .xlsm, .xls, .csv) are supported."
     }, { status: 400 })
   }
 
-  // Check file size — Vercel limit is 4.5MB
   if (file.size > 4 * 1024 * 1024) {
     return NextResponse.json({
-      error: "File too large. Maximum size is 4MB. Please reduce the file size and try again."
-    }, { status: 400 })
+      error: "File too large. Maximum 4MB. Please try uploading again — the app will compress it automatically."
+    }, { status: 413 })
   }
 
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
 
-  // Parse Excel/CSV content — no file saving needed
   let extractedText = ""
+
   try {
-    if (name.endsWith(".csv")) {
+    // If file is plain text (pre-compressed by client), use directly
+    const contentType = file.type
+    if (contentType === "text/plain" || name.endsWith("_compressed.csv")) {
+      extractedText = buffer.toString("utf-8")
+    } else if (name.endsWith(".csv")) {
       extractedText = buffer.toString("utf-8")
     } else {
+      // Parse Excel/xlsm file
       const workbook = XLSX.read(buffer, {
         type: "buffer",
         bookVBA: false,
         cellNF: false,
         cellHTML: false,
+        cellStyles: false,
       })
       const sheets: string[] = []
       for (const sheetName of workbook.SheetNames) {
@@ -70,21 +70,22 @@ export async function POST(req: NextRequest) {
       extractedText = sheets.join("\n\n")
     }
   } catch (e: any) {
-    console.error("Excel parse error:", e)
-    return NextResponse.json({ error: e?.message ?? String(e) }, { status: 400 })
+    console.error("Parse error:", e)
+    return NextResponse.json({
+      error: `Could not parse file: ${e?.message ?? "Unknown error"}`
+    }, { status: 400 })
   }
 
   if (!extractedText.trim()) {
-    return NextResponse.json({ error: "Excel file appears to be empty." }, { status: 400 })
+    return NextResponse.json({ error: "File appears to be empty." }, { status: 400 })
   }
 
-  // Save document record — no local file, content stored in DB
   const doc = await db.document.create({
     data: {
       name: file.name,
       projectName: projectName || file.name.replace(/\.[^.]+$/, ""),
       location,
-      blobUrl: `db://${Date.now()}_${file.name}`, // placeholder, content is in DB
+      blobUrl: `db://${Date.now()}_${file.name}`,
       fileType: "excel",
       fileSize: file.size,
       status: "ready",
