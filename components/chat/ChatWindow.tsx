@@ -1,124 +1,68 @@
 "use client"
-import { OnboardingModal } from "@/components/OnboardingModal"
 import { useState, useRef, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { HardHat, Database, MessageSquare, X } from "lucide-react"
 import { MessageBubble, type Message } from "./MessageBubble"
 import { MessageInput } from "./MessageInput"
 import { TypingIndicator } from "./TypingIndicator"
 import { useTheme } from "@/components/layout/Sidebar"
+import { OnboardingModal } from "@/components/OnboardingModal"
+import { useToast } from "@/components/Toast"
 
 function StorageModal({ files, T, onConfirm, onCancel }: {
-  files: File[]
-  T: any
-  onConfirm: (temporary: boolean) => void
-  onCancel: () => void
+  files: File[]; T: any
+  onConfirm: (temporary: boolean) => void; onCancel: () => void
 }) {
   const [selected, setSelected] = useState<"permanent" | "temporary" | null>(null)
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 transition-colors duration-300 ease-in-out"
-      style={{ background: "rgba(0,0,0,0.65)" }}>
-      <div className="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl transition-colors duration-300 ease-in-out"
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.75)" }}>
+      <div className="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl"
         style={{ background: T.surface, border: `1px solid ${T.borderHover}` }}>
-
-        <div className="flex items-center justify-between px-6 py-4 transition-colors duration-300 ease-in-out"
+        <div className="flex items-center justify-between px-6 py-4"
           style={{ borderBottom: `1px solid ${T.border}` }}>
           <div>
-            <h2 className="text-base font-semibold transition-colors duration-300 ease-in-out" style={{ color: T.text }}>
-              How do you want to store this?
-            </h2>
-            <p className="text-xs mt-0.5 transition-colors duration-300 ease-in-out" style={{ color: T.faint }}>
+            <h2 className="text-base font-semibold" style={{ color: T.text }}>How do you want to store this?</h2>
+            <p className="text-xs mt-0.5" style={{ color: T.faint }}>
               {files.length === 1 ? files[0].name : `${files.length} files selected`}
             </p>
           </div>
-          <button onClick={onCancel} className="p-1.5 rounded-lg transition-colors duration-300 ease-in-out"
-            style={{ color: T.faint }}
-            onMouseEnter={e => (e.currentTarget.style.background = T.surfHover)}
-            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+          <button onClick={onCancel} style={{ color: T.faint, background: "none", border: "none", cursor: "pointer", padding: 4 }}>
             <X size={16} />
           </button>
         </div>
-
         <div className="p-6 space-y-3">
-          <button
-            onClick={() => setSelected("permanent")}
-            className="w-full flex items-start gap-4 p-4 rounded-xl text-left transition-all duration-300 ease-in-out"
-            style={{
-              background: selected === "permanent" ? `${T.accent}12` : T.surfHover,
-              border: `2px solid ${selected === "permanent" ? T.accent : T.border}`,
-            }}
-          >
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition-colors duration-300 ease-in-out"
-              style={{ background: `${T.accent}20` }}>
-              <Database size={16} color={T.accent} />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold transition-colors duration-300 ease-in-out" style={{ color: T.text }}>Save permanently</p>
-              <p className="text-xs mt-0.5 leading-relaxed transition-colors duration-300 ease-in-out" style={{ color: T.muted }}>
-                Saved to your Documents library. Available in all future chats. Delete anytime.
-              </p>
-            </div>
-            <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 transition-colors duration-300 ease-in-out"
-              style={{
-                borderColor: selected === "permanent" ? T.accent : T.faint,
-                background: selected === "permanent" ? T.accent : "transparent",
-              }}>
-              {selected === "permanent" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-            </div>
-          </button>
-
-          <button
-            onClick={() => setSelected("temporary")}
-            className="w-full flex items-start gap-4 p-4 rounded-xl text-left transition-all duration-300 ease-in-out"
-            style={{
-              background: selected === "temporary" ? `${T.accent}12` : T.surfHover,
-              border: `2px solid ${selected === "temporary" ? T.accent : T.border}`,
-            }}
-          >
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-              style={{ background: "rgba(99,102,241,0.15)" }}>
-              <MessageSquare size={16} color="#818cf8" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold transition-colors duration-300 ease-in-out" style={{ color: T.text }}>This chat only</p>
-              <p className="text-xs mt-0.5 leading-relaxed transition-colors duration-300 ease-in-out" style={{ color: T.muted }}>
-                Only used in this chat. Not saved to Documents. Removed when this chat is deleted.
-              </p>
-            </div>
-            <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 transition-colors duration-300 ease-in-out"
-              style={{
-                borderColor: selected === "temporary" ? T.accent : T.faint,
-                background: selected === "temporary" ? T.accent : "transparent",
-              }}>
-              {selected === "temporary" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-            </div>
-          </button>
+          {[
+            { key: "permanent" as const, icon: Database, iconColor: T.accent, iconBg: `${T.accent}20`, title: "Save permanently", desc: "Saved to your Documents library. Available in all future chats. Delete anytime." },
+            { key: "temporary" as const, icon: MessageSquare, iconColor: "#818cf8", iconBg: "rgba(99,102,241,0.15)", title: "This chat only", desc: "Only used in this chat. Not saved to Documents. Removed when this chat is deleted." },
+          ].map(({ key, icon: Icon, iconColor, iconBg, title, desc }) => (
+            <button key={key} onClick={() => setSelected(key)}
+              className="w-full flex items-start gap-4 p-4 rounded-xl text-left"
+              style={{ background: selected === key ? `${T.accent}12` : T.surfHover, border: `2px solid ${selected === key ? T.accent : T.border}`, cursor: "pointer" }}>
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: iconBg }}>
+                <Icon size={16} color={iconColor} />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold" style={{ color: T.text }}>{title}</p>
+                <p className="text-xs mt-0.5 leading-relaxed" style={{ color: T.muted }}>{desc}</p>
+              </div>
+              <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-1"
+                style={{ borderColor: selected === key ? T.accent : T.faint, background: selected === key ? T.accent : "transparent" }}>
+                {selected === key && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+              </div>
+            </button>
+          ))}
         </div>
-
-        <div className="flex items-center justify-end gap-3 px-6 py-4 transition-colors duration-300 ease-in-out"
+        <div className="flex items-center justify-end gap-3 px-6 py-4"
           style={{ borderTop: `1px solid ${T.border}` }}>
-          <button onClick={onCancel}
-            className="px-4 py-2 rounded-lg text-sm transition-colors duration-300 ease-in-out"
-            style={{ color: T.muted, background: T.surfHover }}
+          <button onClick={onCancel} className="px-4 py-2 rounded-lg text-sm"
+            style={{ color: T.muted, background: T.surfHover, border: "none", cursor: "pointer" }}
             onMouseEnter={e => (e.currentTarget.style.background = T.surfActive)}
-            onMouseLeave={e => (e.currentTarget.style.background = T.surfHover)}>
-            Cancel
-          </button>
-          <button
-            onClick={() => selected && onConfirm(selected === "temporary")}
-            disabled={!selected}
-            className="px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ease-in-out"
-            style={{
-              background: selected ? T.accent : T.faint,
-              color: selected ? T.accentText : T.bg,
-              cursor: selected ? "pointer" : "not-allowed",
-            }}
+            onMouseLeave={e => (e.currentTarget.style.background = T.surfHover)}>Cancel</button>
+          <button onClick={() => selected && onConfirm(selected === "temporary")} disabled={!selected}
+            className="px-4 py-2 rounded-lg text-sm font-semibold"
+            style={{ background: selected ? T.accent : T.faint, color: selected ? T.accentText : T.bg, border: "none", cursor: selected ? "pointer" : "not-allowed" }}
             onMouseEnter={e => { if (selected) (e.currentTarget as HTMLElement).style.background = T.accentDark }}
-            onMouseLeave={e => { if (selected) (e.currentTarget as HTMLElement).style.background = T.accent }}
-          >
-            Upload
-          </button>
+            onMouseLeave={e => { if (selected) (e.currentTarget as HTMLElement).style.background = T.accent }}>Upload</button>
         </div>
       </div>
     </div>
@@ -126,8 +70,7 @@ function StorageModal({ files, T, onConfirm, onCancel }: {
 }
 
 export function ChatWindow({ chatId: initId, messages: initMsgs }: {
-  chatId: string | null
-  messages: Message[]
+  chatId: string | null; messages: Message[]
 }) {
   const [msgs, setMsgs] = useState<Message[]>(initMsgs)
   const [chatId, setChatId] = useState<string | null>(initId)
@@ -135,13 +78,26 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const [streamText, setStreamText] = useState("")
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const router = useRouter()
   const { T } = useTheme()
+  const { toast } = useToast()
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && !localStorage.getItem("onboarded")) {
+      setTimeout(() => setShowOnboarding(true), 800)
+    }
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [msgs, streamText])
+
+  useEffect(() => {
+    if (!streaming) {
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100)
+    }
+  }, [streaming])
 
   async function handleUpload(temporary: boolean) {
     if (!pendingFiles) return
@@ -150,11 +106,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     setUploading(true)
 
     const uploadingId = Date.now().toString() + "_upload"
-    setMsgs(p => [...p, {
-      id: uploadingId,
-      role: "assistant",
-      content: `⏳ Uploading **${files.map(f => f.name).join(", ")}**…`,
-    }])
+    setMsgs(p => [...p, { id: uploadingId, role: "assistant", content: `⏳ Uploading **${files.map(f => f.name).join(", ")}**…` }])
 
     const uploaded: string[] = []
     const failed: string[] = []
@@ -164,7 +116,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       fd.append("file", f)
       fd.append("temporary", String(temporary))
       if (chatId) fd.append("chatId", chatId)
-
       try {
         const r = await fetch("/api/upload", { method: "POST", body: fd })
         let data: any = {}
@@ -178,19 +129,19 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
     setUploading(false)
 
+    if (uploaded.length > 0) toast(`${uploaded.join(", ")} uploaded successfully`, "success")
+    if (failed.length > 0) toast(`Upload failed: ${failed.join(", ")}`, "error")
+
     const lines: string[] = []
     if (uploaded.length > 0) {
       lines.push(`✅ **${uploaded.join(", ")}** uploaded successfully.`)
       lines.push(temporary
         ? "This file is only available in this chat. Ask me anything about it."
-        : "This file is saved to your Documents library and available in all chats. Ask me anything about it."
-      )
+        : "This file is saved to your Documents library and available in all chats. Ask me anything about it.")
     }
     if (failed.length > 0) lines.push(`❌ Failed: ${failed.join(", ")}`)
 
-    setMsgs(p => p.map(m =>
-      m.id === uploadingId ? { ...m, content: lines.join("\n\n") } : m
-    ))
+    setMsgs(p => p.map(m => m.id === uploadingId ? { ...m, content: lines.join("\n\n") } : m))
   }
 
   async function send(text: string) {
@@ -211,6 +162,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       const dec = new TextDecoder()
       let full = ""
       let finalSources: string[] = []
+      let newChatId = chatId
 
       while (true) {
         const { done, value } = await reader.read()
@@ -220,14 +172,9 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           try {
             const ev = JSON.parse(line.slice(6))
             if (ev.type === "init") {
+              newChatId = ev.chatId
               setChatId(ev.chatId)
-
-              // FIX IS HERE: We use replaceState instead of router.replace
-              // This changes the URL to the new chat ID without forcing the component to unmount!
-              if (!initId) {
-                window.history.replaceState(null, "", `/chat/${ev.chatId}`)
-              }
-
+              if (!initId) window.history.replaceState(null, "", `/chat/${ev.chatId}`)
             } else if (ev.type === "token") {
               full += ev.text
               setStreamText(full)
@@ -238,13 +185,23 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         }
       }
 
+      // Add message FIRST, then clear stream text after a tick
+      // This prevents the blank flash between streaming and final message
       setMsgs(p => [...p, {
         id: Date.now() + "_ai",
         role: "assistant",
         content: full,
         sources: finalSources,
       }])
-      setStreamText("")
+
+      // Clear stream text after React has rendered the new message
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setStreamText("")
+          setStreaming(false)
+        })
+      })
+
     } catch (err: any) {
       setMsgs(p => [...p, {
         id: Date.now() + "_err",
@@ -252,7 +209,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         content: `Sorry, something went wrong: ${err?.message ?? "Unknown error"}`,
       }])
       setStreamText("")
-    } finally {
       setStreaming(false)
     }
   }
@@ -260,54 +216,60 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const empty = msgs.length === 0 && !streaming
 
   return (
-    <div className="flex h-full overflow-hidden transition-colors duration-300 ease-in-out" style={{ background: T.bg }}>
+    <div className="flex h-full overflow-hidden" style={{ background: T.bg }}>
+
+      {showOnboarding && (
+        <OnboardingModal onClose={() => {
+          setShowOnboarding(false)
+          localStorage.setItem("onboarded", "true")
+        }} />
+      )}
 
       {pendingFiles && (
-        <StorageModal
-          files={pendingFiles}
-          T={T}
-          onConfirm={handleUpload}
-          onCancel={() => setPendingFiles(null)}
-        />
+        <StorageModal files={pendingFiles} T={T} onConfirm={handleUpload} onCancel={() => setPendingFiles(null)} />
       )}
 
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="flex-1 overflow-y-auto transition-colors duration-300 ease-in-out" style={{ background: T.bg }}>
+        <div className="flex-1 overflow-y-auto" style={{ background: T.bg }}>
           {empty ? (
             <div className="flex flex-col items-center justify-center h-full px-6 py-12">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4 transition-colors duration-300 ease-in-out"
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
                 style={{ background: `${T.accent}15`, border: `1px solid ${T.accent}30` }}>
                 <HardHat size={20} color={T.accent} />
               </div>
-              <h3 className="text-base font-semibold mb-2 transition-colors duration-300 ease-in-out" style={{ color: T.text }}>
+              <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>
                 What can I help you estimate?
               </h3>
-              <p className="text-sm text-center max-w-md leading-relaxed transition-colors duration-300 ease-in-out" style={{ color: T.muted }}>
+              <p className="text-sm text-center max-w-md leading-relaxed" style={{ color: T.muted }}>
                 Ask anything about construction costs, labor rates, materials, permits, or taxes.
                 Use the 📎 button below to upload an Excel file and ask questions about it.
               </p>
+              <button onClick={() => setShowOnboarding(true)}
+                className="mt-6 text-xs px-3 py-1.5 rounded-lg"
+                style={{ color: T.accent, background: `${T.accent}10`, border: `1px solid ${T.accent}20`, cursor: "pointer" }}>
+                View getting started guide
+              </button>
             </div>
           ) : (
             <div className="max-w-3xl mx-auto px-4 py-6 space-y-0.5">
               {msgs.map(m => <MessageBubble key={m.id} msg={m} />)}
-              {streaming && (
-                streamText
-                  ? <MessageBubble msg={{ id: "s", role: "assistant", content: streamText }} streaming />
-                  : <TypingIndicator />
+              {streaming && streamText && (
+                <MessageBubble msg={{ id: "streaming", role: "assistant", content: streamText }} streaming />
               )}
+              {streaming && !streamText && <TypingIndicator />}
               <div ref={bottomRef} />
             </div>
           )}
         </div>
 
-        <div className="shrink-0 transition-colors duration-300 ease-in-out" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
+        <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
           <div className="max-w-3xl mx-auto px-4 py-4">
             <MessageInput
               onSend={send}
               onFilesSelected={setPendingFiles}
               disabled={streaming || uploading}
             />
-            <p className="text-center text-[11px] mt-2 transition-colors duration-300 ease-in-out" style={{ color: T.faint }}>
+            <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
               Responses are based on uploaded data only. Esti-Mate AI can make mistakes. Check important info.
             </p>
           </div>
