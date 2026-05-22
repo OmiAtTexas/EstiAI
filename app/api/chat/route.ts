@@ -3,12 +3,14 @@ import { getToken } from "next-auth/jwt"
 import { db } from "@/lib/db"
 import { ragStream } from "@/lib/rag"
 
+export const maxDuration = 60
+
 export async function POST(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const userId = token.id as string
-  const { message, chatId } = await req.json()
+  const { message, chatId, activeDocIds } = await req.json()
   if (!message?.trim()) return NextResponse.json({ error: "Empty message" }, { status: 400 })
 
   let chat: { id: string; messages: { role: string; content: string }[] }
@@ -36,24 +38,20 @@ export async function POST(req: NextRequest) {
   }))
 
   try {
-    // Pass chatId to ragStream so it can include temporary docs for this chat
-    const { tokens, sources } = await ragStream(message, history, chat.id)
+    const { tokens, sources } = await ragStream(message, history, chat.id, activeDocIds)
     let full = ""
 
     const body = new ReadableStream({
       async start(controller) {
         const enc = new TextEncoder()
         controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: "init", chatId: chat.id })}\n\n`))
-
         for await (const tok of tokens) {
           full += tok
           controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: "token", text: tok })}\n\n`))
         }
-
         await db.message.create({
           data: { chatId: chat.id, role: "assistant", content: full, sources: JSON.stringify(sources) },
         })
-
         controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: "done", sources })}\n\n`))
         controller.close()
       },
