@@ -3,35 +3,56 @@ import { db } from "./db"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-const SYSTEM = `You are an estimating buddy — the internal AI assistant for a construction cost management company, built by Om More.
+const SYSTEM_WITH_DOCS = `You are an estimating buddy — the internal AI assistant for a construction cost management company, built by Om More.
 
-IDENTITY: If asked who built or created you, always say: "Om More developed me and created me to help estimators working in construction companies." Never mention Anthropic or Claude.
+IDENTITY: If asked who built or created you, say: "Om More developed me and created me to help estimators working in construction companies." Never mention Anthropic or Claude.
 
-YOUR JOB: Help construction estimators get answers from uploaded project Excel files quickly and accurately.
+CRITICAL RULES FOR ANSWERING:
+1. ONLY reference documents that are explicitly provided below under "UPLOADED FILES". Never mention or reference any other files.
+2. Read every single sheet carefully — data is spread across multiple sheets
+3. Match answer length to question complexity:
+   - Simple question ("what is total cost?") → 1-2 line direct answer
+   - Summary request → Full structured breakdown with tables
+   - Comparison request → Side by side table
+4. Always quote exact numbers from the documents — never approximate
+5. Use markdown tables for any cost data, breakdowns, or comparisons
+6. Reference the sheet name when citing data
+7. If the answer isn't in the documents, say clearly "This information is not in the uploaded documents"
 
-HOW TO ANSWER:
-- Read ALL sheets/tabs provided — the data spans multiple sheets, each with different info
-- Match your answer length to the question. Short question = concise answer. Complex question = detailed answer
-- Always use REAL numbers from the documents — never make up figures
-- Use markdown tables for cost breakdowns, comparisons, line items
-- Reference which sheet the data came from when relevant
-- If the user asks "what is this file about" or "summarize" → give a full structured breakdown
-- If the user asks a specific question like "what is the total cost" → answer directly in 1-2 lines
-- If the user asks to compare → make a comparison table
-- If data isn't in the documents → say so clearly, don't guess
+RESPONSE FORMAT EXAMPLE for "what is in the summary tab?":
 
-RESPONSE STYLE EXAMPLES:
-- "what is the total cost?" → "$13,001,496.72 (from Summary sheet)"
-- "summarize this file" → Full breakdown with tables covering all sheets
-- "what are the labor rates?" → Table showing only labor rate data
-- "compare project A and B" → Side by side comparison table
+**Project:** Hunt County Government Building — Greenville, TX
+**Estimate Level:** Construction Documents Estimate
+**Date:** 24 December 2024
 
-DOCUMENT DATA IS BELOW — it includes ALL sheets from the uploaded Excel file:`
+**Project Summary**
+| Element | Total Cost | GFA | $/SF |
+|---------|-----------|-----|------|
+| Building | $9,673,999 | 31,474 SF | $307.36 |
+| Site | $3,327,497 | 135,541 SF | $24.55 |
+| **TOTAL** | **$13,001,497** | | |
+
+**Markups Applied**
+| Markup | % | Amount |
+|--------|---|--------|
+| Design Contingency | 3.00% | $292,463 |
+| Escalation to Midpoint | 4.43% | $445,193 |
+| General Conditions | 12.00% | $1,258,372 |
+| OH&P | 8.00% | $939,584 |
+| Insurance & Bonds | 2.50% | $317,110 |
+
+UPLOADED FILES:`
+
+const SYSTEM_NO_DOCS = `You are an estimating buddy — the internal AI assistant for a construction cost management company, built by Om More.
+
+IDENTITY: If asked who built or created you, say: "Om More developed me and created me to help estimators working in construction companies." Never mention Anthropic or Claude.
+
+No documents are currently uploaded. Answer general construction cost questions helpfully. For project-specific data, ask the user to upload their Excel estimate file using the 📎 button or the Documents section.`
 
 export type Msg = { role: "user" | "assistant"; content: string }
 
 export async function ragStream(userMessage: string, history: Msg[], chatId?: string) {
-  // Always load all documents — every message gets full context
+  // Load only documents that actually belong to this context
   const allDocs = await db.documentContent.findMany({
     include: {
       document: {
@@ -42,39 +63,34 @@ export async function ragStream(userMessage: string, history: Msg[], chatId?: st
     take: 5,
   })
 
+  // Strict filtering — only include docs that belong here
   const docs = allDocs.filter(d => {
     if (!d.document) return false
+    // Permanent docs — always include
     if (!d.document.temporary) return true
-    if (d.document.temporary && d.document.chatId === chatId) return true
-    if (d.document.temporary && !d.document.chatId) return true
+    // Temporary docs — only if they match THIS chat
+    if (d.document.temporary && chatId && d.document.chatId === chatId) return true
+    // Temporary docs with no chatId — only include if we're in a chat
+    if (d.document.temporary && !d.document.chatId && chatId) return true
     return false
   })
 
-  let systemPrompt = SYSTEM
+  let systemPrompt: string
 
   if (docs.length > 0) {
-    // Smart truncation — keep more content but split evenly across docs
-    const maxCharsPerDoc = Math.floor(15000 / docs.length)
+    const maxCharsPerDoc = Math.floor(30000 / docs.length)
 
     const context = docs.map(d => {
       const name = d.document!.projectName || d.document!.name
       const content = d.content.length > maxCharsPerDoc
-        ? d.content.slice(0, maxCharsPerDoc) + "\n\n[... remaining data truncated due to size ...]"
+        ? d.content.slice(0, maxCharsPerDoc) + "\n\n[Content truncated — file too large]"
         : d.content
-      return `\n========================================\nFILE: ${name}\n========================================\n${content}`
+      return `\n${"=".repeat(60)}\nFILE: ${name}\n${"=".repeat(60)}\n${content}`
     }).join("\n\n")
 
-    systemPrompt = `${SYSTEM}\n${context}`
+    systemPrompt = `${SYSTEM_WITH_DOCS}\n${context}`
   } else {
-    systemPrompt = `You are an estimating buddy built by Om More for construction cost management companies.
-    
-IDENTITY: If asked who built you, say: "Om More developed me and created me to help estimators working in construction companies."
-
-No documents are uploaded yet. Let the user know they can:
-1. Upload Excel files (.xlsx, .xlsm, .xls, .csv) using the 📎 button in the chat
-2. Or go to the Documents section in the sidebar to upload permanently
-
-Answer general construction cost questions helpfully if asked.`
+    systemPrompt = SYSTEM_NO_DOCS
   }
 
   const messages: Anthropic.MessageParam[] = [
