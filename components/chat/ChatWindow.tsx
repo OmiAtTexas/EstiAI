@@ -85,6 +85,20 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const { T } = useTheme()
   const { toast } = useToast()
 
+  // Pre-load all permanent doc IDs immediately on mount
+  // This ensures activeDocIds is populated before the user sends their first message
+  useEffect(() => {
+    fetch("/api/documents")
+      .then(r => r.json())
+      .then(d => {
+        const ids = (d.documents ?? [])
+          .filter((doc: any) => !doc.temporary)
+          .map((doc: any) => doc.id)
+        setActiveDocIds(ids)
+      })
+      .catch(() => { }) // silently fail — no docs is fine
+  }, [])
+
   useEffect(() => {
     if (typeof window !== "undefined" && !localStorage.getItem("onboarded")) {
       setTimeout(() => setShowOnboarding(true), 800)
@@ -130,7 +144,9 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     const lines: string[] = []
     if (uploaded.length > 0) {
       lines.push(`✅ **${uploaded.join(", ")}** uploaded successfully.`)
-      lines.push(temporary ? "This file is only available in this chat. Ask me anything about it." : "This file is saved to your Documents library. Ask me anything about it.")
+      lines.push(temporary
+        ? "This file is only available in this chat. Ask me anything about it."
+        : "This file is saved to your Documents library. Ask me anything about it.")
     }
     if (failed.length > 0) lines.push(`❌ Failed: ${failed.join(", ")}`)
     setMsgs(p => p.map(m => m.id === uploadingId ? { ...m, content: lines.join("\n\n") } : m))
@@ -150,7 +166,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Pass selected doc IDs so server only uses those docs
         body: JSON.stringify({ message: text, chatId, activeDocIds }),
       })
       if (!res.ok) throw new Error(`Server error ${res.status}`)
@@ -184,10 +199,19 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         }
       }
 
-      setMsgs(p => [...p, { id: Date.now() + "_ai", role: "assistant", content: full || "Sorry, I didn't receive a response. Please try again.", sources: finalSources }])
+      setMsgs(p => [...p, {
+        id: Date.now() + "_ai",
+        role: "assistant",
+        content: full || "Sorry, I didn't receive a response. Please try again.",
+        sources: finalSources,
+      }])
       setStreamText("")
     } catch (err: any) {
-      setMsgs(p => [...p, { id: Date.now() + "_err", role: "assistant", content: `Sorry, something went wrong: ${err?.message ?? "Unknown error"}` }])
+      setMsgs(p => [...p, {
+        id: Date.now() + "_err",
+        role: "assistant",
+        content: `Sorry, something went wrong: ${err?.message ?? "Unknown error"}`,
+      }])
       setStreamText("")
     } finally {
       setIsStreaming(false)
@@ -199,7 +223,10 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   return (
     <div className="flex h-full overflow-hidden" style={{ background: T.bg }}>
       {showOnboarding && (
-        <OnboardingModal onClose={() => { setShowOnboarding(false); localStorage.setItem("onboarded", "true") }} />
+        <OnboardingModal onClose={() => {
+          setShowOnboarding(false)
+          localStorage.setItem("onboarded", "true")
+        }} />
       )}
       {pendingFiles && (
         <StorageModal files={pendingFiles} T={T} onConfirm={handleUpload} onCancel={() => setPendingFiles(null)} />
@@ -213,7 +240,9 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
                 style={{ background: `${T.accent}15`, border: `1px solid ${T.accent}30` }}>
                 <HardHat size={20} color={T.accent} />
               </div>
-              <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>What can I help you estimate?</h3>
+              <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>
+                What can I help you estimate?
+              </h3>
               <p className="text-sm text-center max-w-md leading-relaxed" style={{ color: T.muted }}>
                 Ask anything about construction costs, labor rates, materials, permits, or taxes.
                 Use the 📎 button below to upload an Excel file and ask questions about it.
@@ -236,13 +265,21 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           )}
         </div>
 
+        {/* Input area */}
         <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
           <div className="max-w-3xl mx-auto px-4 pt-2 pb-1">
             {/* Doc selector — only shows when 2+ permanent docs exist */}
-            <DocSelector onSelectionChange={setActiveDocIds} />
+            <DocSelector
+              activeDocIds={activeDocIds}
+              onSelectionChange={setActiveDocIds}
+            />
           </div>
           <div className="max-w-3xl mx-auto px-4 pb-4">
-            <MessageInput onSend={send} onFilesSelected={setPendingFiles} disabled={isStreaming || uploading} />
+            <MessageInput
+              onSend={send}
+              onFilesSelected={setPendingFiles}
+              disabled={isStreaming || uploading}
+            />
             <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
               Responses are based on uploaded data only. Esti-Mate AI can make mistakes. Check important info.
             </p>
