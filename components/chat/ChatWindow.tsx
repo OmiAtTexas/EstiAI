@@ -69,14 +69,13 @@ function StorageModal({ files, T, onConfirm, onCancel }: {
   )
 }
 
-const STREAMING_ID = "__streaming__"
-
 export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   chatId: string | null; messages: Message[]
 }) {
   const [msgs, setMsgs] = useState<Message[]>(initMsgs)
   const [chatId, setChatId] = useState<string | null>(initId)
   const [isStreaming, setIsStreaming] = useState(false)
+  const [streamText, setStreamText] = useState("")
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
   const [uploading, setUploading] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
@@ -92,7 +91,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [msgs])
+  }, [msgs, streamText])
 
   async function handleUpload(temporary: boolean) {
     if (!pendingFiles) return
@@ -142,12 +141,9 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   async function send(text: string) {
     if (!text.trim() || isStreaming) return
 
-    // Add user message
     setMsgs(p => [...p, { id: Date.now().toString(), role: "user", content: text }])
     setIsStreaming(true)
-
-    // Add streaming placeholder message — we'll update it in place
-    setMsgs(p => [...p, { id: STREAMING_ID, role: "assistant", content: "" }])
+    setStreamText("")
 
     let full = ""
     let finalSources: string[] = []
@@ -158,27 +154,35 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text, chatId }),
       })
-      if (!res.ok) throw new Error("Request failed")
+      if (!res.ok) throw new Error(`Server error ${res.status}`)
 
       const reader = res.body!.getReader()
       const dec = new TextDecoder()
+      let buffer = "" // ← KEY FIX: buffer handles partial SSE chunks from Vercel
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        for (const line of dec.decode(value).split("\n")) {
+
+        // Append to buffer instead of processing raw chunk directly
+        buffer += dec.decode(value, { stream: true })
+
+        // Split on newlines but keep incomplete last line in buffer
+        const lines = buffer.split("\n")
+        buffer = lines.pop() ?? ""
+
+        for (const line of lines) {
           if (!line.startsWith("data: ")) continue
+          const data = line.slice(6).trim()
+          if (!data) continue
           try {
-            const ev = JSON.parse(line.slice(6))
+            const ev = JSON.parse(data)
             if (ev.type === "init") {
               setChatId(ev.chatId)
               if (!initId) window.history.replaceState(null, "", `/chat/${ev.chatId}`)
             } else if (ev.type === "token") {
               full += ev.text
-              // Update the streaming message in place — no separate state needed
-              setMsgs(p => p.map(m =>
-                m.id === STREAMING_ID ? { ...m, content: full } : m
-              ))
+              setStreamText(full)
             } else if (ev.type === "done") {
               finalSources = ev.sources ?? []
             }
@@ -186,36 +190,44 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         }
       }
 
-      // Replace streaming placeholder with final message
-      setMsgs(p => p.map(m =>
-        m.id === STREAMING_ID
-          ? { id: Date.now() + "_ai", role: "assistant", content: full, sources: finalSources }
-          : m
-      ))
+      // Flush remaining buffer
+      if (buffer.startsWith("data: ")) {
+        try {
+          const ev = JSON.parse(buffer.slice(6).trim())
+          if (ev.type === "token") full += ev.text
+        } catch { }
+      }
+
+      setMsgs(p => [...p, {
+        id: Date.now() + "_ai",
+        role: "assistant",
+        content: full || "Sorry, I didn't receive a response. Please try again.",
+        sources: finalSources,
+      }])
+      setStreamText("")
 
     } catch (err: any) {
-      setMsgs(p => p.map(m =>
-        m.id === STREAMING_ID
-          ? { id: Date.now() + "_err", role: "assistant", content: `Sorry, something went wrong: ${err?.message ?? "Unknown error"}` }
-          : m
-      ))
+      setMsgs(p => [...p, {
+        id: Date.now() + "_err",
+        role: "assistant",
+        content: `Sorry, something went wrong: ${err?.message ?? "Unknown error"}`,
+      }])
+      setStreamText("")
     } finally {
       setIsStreaming(false)
     }
   }
 
-  const empty = msgs.length === 0
+  const empty = msgs.length === 0 && !isStreaming && !streamText
 
   return (
     <div className="flex h-full overflow-hidden" style={{ background: T.bg }}>
-
       {showOnboarding && (
         <OnboardingModal onClose={() => {
           setShowOnboarding(false)
           localStorage.setItem("onboarded", "true")
         }} />
       )}
-
       {pendingFiles && (
         <StorageModal files={pendingFiles} T={T} onConfirm={handleUpload} onCancel={() => setPendingFiles(null)} />
       )}
@@ -228,9 +240,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
                 style={{ background: `${T.accent}15`, border: `1px solid ${T.accent}30` }}>
                 <HardHat size={20} color={T.accent} />
               </div>
-              <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>
-                What can I help you estimate?
-              </h3>
+              <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>What can I help you estimate?</h3>
               <p className="text-sm text-center max-w-md leading-relaxed" style={{ color: T.muted }}>
                 Ask anything about construction costs, labor rates, materials, permits, or taxes.
                 Use the 📎 button below to upload an Excel file and ask questions about it.
@@ -243,13 +253,14 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto px-4 py-6" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {msgs.map(m => (
+              {msgs.map(m => <MessageBubble key={m.id} msg={m} />)}
+              {isStreaming && streamText && (
                 <MessageBubble
-                  key={m.id}
-                  msg={m}
-                  streaming={m.id === STREAMING_ID && isStreaming}
+                  msg={{ id: "streaming", role: "assistant", content: streamText }}
+                  streaming
                 />
-              ))}
+              )}
+              {isStreaming && !streamText && <TypingIndicator />}
               <div ref={bottomRef} />
             </div>
           )}
@@ -257,11 +268,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
         <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
           <div className="max-w-3xl mx-auto px-4 py-4">
-            <MessageInput
-              onSend={send}
-              onFilesSelected={setPendingFiles}
-              disabled={isStreaming || uploading}
-            />
+            <MessageInput onSend={send} onFilesSelected={setPendingFiles} disabled={isStreaming || uploading} />
             <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
               Responses are based on uploaded data only. Esti-Mate AI can make mistakes. Check important info.
             </p>
