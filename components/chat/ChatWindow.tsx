@@ -1,5 +1,5 @@
 "use client"
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect } from "react"
 import { HardHat, Database, MessageSquare, X } from "lucide-react"
 import { MessageBubble, type Message } from "./MessageBubble"
 import { MessageInput } from "./MessageInput"
@@ -7,7 +7,8 @@ import { TypingIndicator } from "./TypingIndicator"
 import { useTheme } from "@/components/layout/Sidebar"
 import { OnboardingModal } from "@/components/OnboardingModal"
 import { useToast } from "@/components/Toast"
-import { DocSelector } from "@/components/DocSelector"
+
+type DocInfo = { id: string; name: string; projectName?: string }
 
 function StorageModal({ files, T, onConfirm, onCancel }: {
   files: File[]; T: any
@@ -80,24 +81,22 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
   const [uploading, setUploading] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
-
-  // Single source of truth for selected doc IDs
-  // null = not loaded yet, [] = loaded but none, [...] = loaded with IDs
+  const [allDocs, setAllDocs] = useState<DocInfo[]>([])
   const [activeDocIds, setActiveDocIds] = useState<string[] | null>(null)
-
   const bottomRef = useRef<HTMLDivElement>(null)
   const { T } = useTheme()
   const { toast } = useToast()
 
-  // Load doc IDs once on mount — DocSelector will then control them
+  // Load all permanent docs on mount
   useEffect(() => {
     fetch("/api/documents")
       .then(r => r.json())
       .then(d => {
-        const ids = (d.documents ?? [])
+        const docs: DocInfo[] = (d.documents ?? [])
           .filter((doc: any) => !doc.temporary)
-          .map((doc: any) => doc.id as string)
-        setActiveDocIds(ids) // start with all selected
+          .map((doc: any) => ({ id: doc.id, name: doc.name, projectName: doc.projectName }))
+        setAllDocs(docs)
+        setActiveDocIds(docs.map(d => d.id)) // all selected by default
       })
       .catch(() => setActiveDocIds([]))
   }, [])
@@ -111,6 +110,39 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [msgs, streamText])
+
+  // Toggle a doc by its filename (as shown in source badges)
+  function toggleDocByName(docName: string) {
+    if (!activeDocIds) return
+
+    // Find the doc ID matching this name
+    const doc = allDocs.find(d => d.name === docName || d.projectName === docName)
+    if (!doc) return
+
+    const isCurrentlyActive = activeDocIds.includes(doc.id)
+
+    if (isCurrentlyActive) {
+      // Don't allow deselecting if it's the only active doc
+      if (activeDocIds.length === 1) {
+        toast("At least one document must be selected", "warning")
+        return
+      }
+      const newIds = activeDocIds.filter(id => id !== doc.id)
+      setActiveDocIds(newIds)
+
+      if (newIds.length === 0) {
+        toast("No documents selected — AI will answer from general knowledge", "warning")
+      } else {
+        const remaining = allDocs.filter(d => newIds.includes(d.id)).map(d => d.projectName || d.name)
+        toast(`Now referring to: ${remaining.join(", ")}`, "info")
+      }
+    } else {
+      const newIds = [...activeDocIds, doc.id]
+      setActiveDocIds(newIds)
+      const active = allDocs.filter(d => newIds.includes(d.id)).map(d => d.projectName || d.name)
+      toast(`Now referring to: ${active.join(", ")}`, "success")
+    }
+  }
 
   async function handleUpload(temporary: boolean) {
     if (!pendingFiles) return
@@ -147,9 +179,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     const lines: string[] = []
     if (uploaded.length > 0) {
       lines.push(`✅ **${uploaded.join(", ")}** uploaded successfully.`)
-      lines.push(temporary
-        ? "This file is only available in this chat. Ask me anything about it."
-        : "This file is saved to your Documents library. Ask me anything about it.")
+      lines.push(temporary ? "This file is only available in this chat. Ask me anything about it." : "This file is saved to your Documents library. Ask me anything about it.")
     }
     if (failed.length > 0) lines.push(`❌ Failed: ${failed.join(", ")}`)
     setMsgs(p => p.map(m => m.id === uploadingId ? { ...m, content: lines.join("\n\n") } : m))
@@ -157,9 +187,8 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
   async function send(text: string) {
     if (!text.trim() || isStreaming) return
-    // Don't send if docs haven't loaded yet
     if (activeDocIds === null) {
-      toast("Loading documents, please wait...", "info")
+      toast("Loading documents, please wait a moment...", "info")
       return
     }
 
@@ -174,7 +203,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Send exact activeDocIds at time of sending — no race condition
         body: JSON.stringify({ message: text, chatId, activeDocIds }),
       })
       if (!res.ok) throw new Error(`Server error ${res.status}`)
@@ -232,10 +260,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   return (
     <div className="flex h-full overflow-hidden" style={{ background: T.bg }}>
       {showOnboarding && (
-        <OnboardingModal onClose={() => {
-          setShowOnboarding(false)
-          localStorage.setItem("onboarded", "true")
-        }} />
+        <OnboardingModal onClose={() => { setShowOnboarding(false); localStorage.setItem("onboarded", "true") }} />
       )}
       {pendingFiles && (
         <StorageModal files={pendingFiles} T={T} onConfirm={handleUpload} onCancel={() => setPendingFiles(null)} />
@@ -249,9 +274,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
                 style={{ background: `${T.accent}15`, border: `1px solid ${T.accent}30` }}>
                 <HardHat size={20} color={T.accent} />
               </div>
-              <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>
-                What can I help you estimate?
-              </h3>
+              <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>What can I help you estimate?</h3>
               <p className="text-sm text-center max-w-md leading-relaxed" style={{ color: T.muted }}>
                 Ask anything about construction costs, labor rates, materials, permits, or taxes.
                 Use the 📎 button below to upload an Excel file and ask questions about it.
@@ -264,7 +287,15 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto px-4 py-6" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {msgs.map(m => <MessageBubble key={m.id} msg={m} />)}
+              {msgs.map(m => (
+                <MessageBubble
+                  key={m.id}
+                  msg={m}
+                  activeDocIds={activeDocIds ?? []}
+                  allDocs={allDocs}
+                  onToggleDoc={toggleDocByName}
+                />
+              ))}
               {isStreaming && streamText && (
                 <MessageBubble msg={{ id: "streaming", role: "assistant", content: streamText }} streaming />
               )}
@@ -275,18 +306,8 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         </div>
 
         <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
-          <div className="max-w-3xl mx-auto px-4 pt-2 pb-1">
-            <DocSelector
-              activeDocIds={activeDocIds ?? []}
-              onSelectionChange={setActiveDocIds}
-            />
-          </div>
-          <div className="max-w-3xl mx-auto px-4 pb-4">
-            <MessageInput
-              onSend={send}
-              onFilesSelected={setPendingFiles}
-              disabled={isStreaming || uploading}
-            />
+          <div className="max-w-3xl mx-auto px-4 py-4">
+            <MessageInput onSend={send} onFilesSelected={setPendingFiles} disabled={isStreaming || uploading} />
             <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
               Responses are based on uploaded data only. Esti-Mate AI can make mistakes. Check important info.
             </p>
