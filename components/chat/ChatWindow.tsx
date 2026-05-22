@@ -1,6 +1,6 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
-import { HardHat, Database, MessageSquare, X } from "lucide-react"
+import { HardHat } from "lucide-react"
 import { MessageBubble, type Message } from "./MessageBubble"
 import { MessageInput } from "./MessageInput"
 import { TypingIndicator } from "./TypingIndicator"
@@ -10,67 +10,6 @@ import { useToast } from "@/components/Toast"
 
 type DocInfo = { id: string; name: string; projectName?: string }
 
-function StorageModal({ files, T, onConfirm, onCancel }: {
-  files: File[]; T: any
-  onConfirm: (temporary: boolean) => void; onCancel: () => void
-}) {
-  const [selected, setSelected] = useState<"permanent" | "temporary" | null>(null)
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.75)" }}>
-      <div className="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl"
-        style={{ background: T.surface, border: `1px solid ${T.borderHover}` }}>
-        <div className="flex items-center justify-between px-6 py-4"
-          style={{ borderBottom: `1px solid ${T.border}` }}>
-          <div>
-            <h2 className="text-base font-semibold" style={{ color: T.text }}>How do you want to store this?</h2>
-            <p className="text-xs mt-0.5" style={{ color: T.faint }}>
-              {files.length === 1 ? files[0].name : `${files.length} files selected`}
-            </p>
-          </div>
-          <button onClick={onCancel} style={{ color: T.faint, background: "none", border: "none", cursor: "pointer", padding: 4 }}>
-            <X size={16} />
-          </button>
-        </div>
-        <div className="p-6 space-y-3">
-          {[
-            { key: "permanent" as const, icon: Database, iconColor: T.accent, iconBg: `${T.accent}20`, title: "Save permanently", desc: "Saved to your Documents library. Available in all future chats. Delete anytime." },
-            { key: "temporary" as const, icon: MessageSquare, iconColor: "#818cf8", iconBg: "rgba(99,102,241,0.15)", title: "This chat only", desc: "Only used in this chat. Not saved to Documents. Removed when this chat is deleted." },
-          ].map(({ key, icon: Icon, iconColor, iconBg, title, desc }) => (
-            <button key={key} onClick={() => setSelected(key)}
-              className="w-full flex items-start gap-4 p-4 rounded-xl text-left"
-              style={{ background: selected === key ? `${T.accent}12` : T.surfHover, border: `2px solid ${selected === key ? T.accent : T.border}`, cursor: "pointer" }}>
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: iconBg }}>
-                <Icon size={16} color={iconColor} />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold" style={{ color: T.text }}>{title}</p>
-                <p className="text-xs mt-0.5 leading-relaxed" style={{ color: T.muted }}>{desc}</p>
-              </div>
-              <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-1"
-                style={{ borderColor: selected === key ? T.accent : T.faint, background: selected === key ? T.accent : "transparent" }}>
-                {selected === key && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-              </div>
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center justify-end gap-3 px-6 py-4"
-          style={{ borderTop: `1px solid ${T.border}` }}>
-          <button onClick={onCancel} className="px-4 py-2 rounded-lg text-sm"
-            style={{ color: T.muted, background: T.surfHover, border: "none", cursor: "pointer" }}
-            onMouseEnter={e => (e.currentTarget.style.background = T.surfActive)}
-            onMouseLeave={e => (e.currentTarget.style.background = T.surfHover)}>Cancel</button>
-          <button onClick={() => selected && onConfirm(selected === "temporary")} disabled={!selected}
-            className="px-4 py-2 rounded-lg text-sm font-semibold"
-            style={{ background: selected ? T.accent : T.faint, color: selected ? T.accentText : T.bg, border: "none", cursor: selected ? "pointer" : "not-allowed" }}
-            onMouseEnter={e => { if (selected) (e.currentTarget as HTMLElement).style.background = T.accentDark }}
-            onMouseLeave={e => { if (selected) (e.currentTarget as HTMLElement).style.background = T.accent }}>Upload</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   chatId: string | null; messages: Message[]
 }) {
@@ -78,7 +17,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const [chatId, setChatId] = useState<string | null>(initId)
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamText, setStreamText] = useState("")
-  const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
   const [uploading, setUploading] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [allDocs, setAllDocs] = useState<DocInfo[]>([])
@@ -87,7 +25,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const { T } = useTheme()
   const { toast } = useToast()
 
-  // Load all permanent docs on mount
+  // Load permanent docs on mount for badge toggling
   useEffect(() => {
     fetch("/api/documents")
       .then(r => r.json())
@@ -96,7 +34,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           .filter((doc: any) => !doc.temporary)
           .map((doc: any) => ({ id: doc.id, name: doc.name, projectName: doc.projectName }))
         setAllDocs(docs)
-        setActiveDocIds(docs.map(d => d.id)) // all selected by default
+        setActiveDocIds(docs.map(d => d.id))
       })
       .catch(() => setActiveDocIds([]))
   }, [])
@@ -111,43 +49,9 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [msgs, streamText])
 
-  // Toggle a doc by its filename (as shown in source badges)
-  function toggleDocByName(docName: string) {
-    if (!activeDocIds) return
-
-    // Find the doc ID matching this name
-    const doc = allDocs.find(d => d.name === docName || d.projectName === docName)
-    if (!doc) return
-
-    const isCurrentlyActive = activeDocIds.includes(doc.id)
-
-    if (isCurrentlyActive) {
-      // Don't allow deselecting if it's the only active doc
-      if (activeDocIds.length === 1) {
-        toast("At least one document must be selected", "warning")
-        return
-      }
-      const newIds = activeDocIds.filter(id => id !== doc.id)
-      setActiveDocIds(newIds)
-
-      if (newIds.length === 0) {
-        toast("No documents selected — AI will answer from general knowledge", "warning")
-      } else {
-        const remaining = allDocs.filter(d => newIds.includes(d.id)).map(d => d.projectName || d.name)
-        toast(`Now referring to: ${remaining.join(", ")}`, "info")
-      }
-    } else {
-      const newIds = [...activeDocIds, doc.id]
-      setActiveDocIds(newIds)
-      const active = allDocs.filter(d => newIds.includes(d.id)).map(d => d.projectName || d.name)
-      toast(`Now referring to: ${active.join(", ")}`, "success")
-    }
-  }
-
-  async function handleUpload(temporary: boolean) {
-    if (!pendingFiles) return
-    const files = pendingFiles
-    setPendingFiles(null)
+  // All uploads are chat-only — no modal, no permanent storage
+  async function handleFiles(files: File[]) {
+    if (files.length === 0) return
     setUploading(true)
 
     const uploadingId = Date.now().toString() + "_upload"
@@ -159,7 +63,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     for (const f of files) {
       const fd = new FormData()
       fd.append("file", f)
-      fd.append("temporary", String(temporary))
+      fd.append("temporary", "true") // always temporary — chat only
       if (chatId) fd.append("chatId", chatId)
       try {
         const r = await fetch("/api/upload", { method: "POST", body: fd })
@@ -173,24 +77,39 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     }
 
     setUploading(false)
-    if (uploaded.length > 0) toast(`${uploaded.join(", ")} uploaded`, "success")
+    if (uploaded.length > 0) toast(`${uploaded.join(", ")} ready — ask me anything about it`, "success")
     if (failed.length > 0) toast(`Upload failed: ${failed.join(", ")}`, "error")
 
     const lines: string[] = []
     if (uploaded.length > 0) {
       lines.push(`✅ **${uploaded.join(", ")}** uploaded successfully.`)
-      lines.push(temporary ? "This file is only available in this chat. Ask me anything about it." : "This file is saved to your Documents library. Ask me anything about it.")
+      lines.push("Ask me anything about it.")
     }
     if (failed.length > 0) lines.push(`❌ Failed: ${failed.join(", ")}`)
     setMsgs(p => p.map(m => m.id === uploadingId ? { ...m, content: lines.join("\n\n") } : m))
   }
 
+  function toggleDocByName(docName: string) {
+    if (!activeDocIds) return
+    const doc = allDocs.find(d => d.name === docName || d.projectName === docName)
+    if (!doc) return
+    const isActive = activeDocIds.includes(doc.id)
+    if (isActive) {
+      if (activeDocIds.length === 1) { toast("At least one document must be selected", "warning"); return }
+      const newIds = activeDocIds.filter(id => id !== doc.id)
+      setActiveDocIds(newIds)
+      const remaining = allDocs.filter(d => newIds.includes(d.id)).map(d => d.projectName || d.name)
+      toast(`Now referring to: ${remaining.join(", ")}`, "info")
+    } else {
+      const newIds = [...activeDocIds, doc.id]
+      setActiveDocIds(newIds)
+      toast(`Now referring to: ${allDocs.filter(d => newIds.includes(d.id)).map(d => d.projectName || d.name).join(", ")}`, "success")
+    }
+  }
+
   async function send(text: string) {
     if (!text.trim() || isStreaming) return
-    if (activeDocIds === null) {
-      toast("Loading documents, please wait a moment...", "info")
-      return
-    }
+    if (activeDocIds === null) { toast("Loading, please wait...", "info"); return }
 
     setMsgs(p => [...p, { id: Date.now().toString(), role: "user", content: text }])
     setIsStreaming(true)
@@ -262,9 +181,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       {showOnboarding && (
         <OnboardingModal onClose={() => { setShowOnboarding(false); localStorage.setItem("onboarded", "true") }} />
       )}
-      {pendingFiles && (
-        <StorageModal files={pendingFiles} T={T} onConfirm={handleUpload} onCancel={() => setPendingFiles(null)} />
-      )}
 
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <div className="flex-1 overflow-y-auto" style={{ background: T.bg }}>
@@ -276,8 +192,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
               </div>
               <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>What can I help you estimate?</h3>
               <p className="text-sm text-center max-w-md leading-relaxed" style={{ color: T.muted }}>
-                Ask anything about construction costs, labor rates, materials, permits, or taxes.
-                Use the 📎 button below to upload an Excel file and ask questions about it.
+                Upload an Excel file using the 📎 button below and ask anything about it — costs, breakdowns, comparisons, line items.
               </p>
               <button onClick={() => setShowOnboarding(true)}
                 className="mt-6 text-xs px-3 py-1.5 rounded-lg"
@@ -307,7 +222,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
         <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
           <div className="max-w-3xl mx-auto px-4 py-4">
-            <MessageInput onSend={send} onFilesSelected={setPendingFiles} disabled={isStreaming || uploading} />
+            <MessageInput onSend={send} onFilesSelected={handleFiles} disabled={isStreaming || uploading} />
             <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
               Responses are based on uploaded data only. Esti-Mate AI can make mistakes. Check important info.
             </p>

@@ -388,19 +388,6 @@ export function Sidebar({ user }: { user: User }) {
 
       {/* Nav links */}
       <div className="px-2 pb-1 shrink-0 transition-colors duration-300 ease-in-out" style={{ borderTop: `1px solid ${T.border}` }}>
-        <Link href="/documents">
-          <div className="flex items-center gap-2 px-2 py-2 rounded-lg mt-1 transition-colors duration-300 ease-in-out"
-            style={{
-              background: pathname === "/documents" ? T.surfActive : "transparent",
-              color: pathname === "/documents" ? T.text : T.muted,
-              justifyContent: open ? "flex-start" : "center",
-            }}
-            onMouseEnter={e => { if (pathname !== "/documents") e.currentTarget.style.background = T.surfHover }}
-            onMouseLeave={e => { if (pathname !== "/documents") e.currentTarget.style.background = "transparent" }}>
-            <FileText size={15} className="shrink-0" />
-            {open && <span className="text-sm">Documents</span>}
-          </div>
-        </Link>
       </div>
 
       {/* User button */}
