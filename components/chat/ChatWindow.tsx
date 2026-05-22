@@ -69,13 +69,14 @@ function StorageModal({ files, T, onConfirm, onCancel }: {
   )
 }
 
+const STREAMING_ID = "__streaming__"
+
 export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   chatId: string | null; messages: Message[]
 }) {
   const [msgs, setMsgs] = useState<Message[]>(initMsgs)
   const [chatId, setChatId] = useState<string | null>(initId)
-  const [streaming, setStreaming] = useState(false)
-  const [streamText, setStreamText] = useState("")
+  const [isStreaming, setIsStreaming] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
   const [uploading, setUploading] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
@@ -91,7 +92,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [msgs, streamText])
+  }, [msgs])
 
   async function handleUpload(temporary: boolean) {
     if (!pendingFiles) return
@@ -123,7 +124,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
     setUploading(false)
 
-    if (uploaded.length > 0) toast(`${uploaded.join(", ")} uploaded successfully`, "success")
+    if (uploaded.length > 0) toast(`${uploaded.join(", ")} uploaded`, "success")
     if (failed.length > 0) toast(`Upload failed: ${failed.join(", ")}`, "error")
 
     const lines: string[] = []
@@ -139,12 +140,14 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   }
 
   async function send(text: string) {
-    if (!text.trim() || streaming) return
+    if (!text.trim() || isStreaming) return
 
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: text }
-    setMsgs(p => [...p, userMsg])
-    setStreaming(true)
-    setStreamText("")
+    // Add user message
+    setMsgs(p => [...p, { id: Date.now().toString(), role: "user", content: text }])
+    setIsStreaming(true)
+
+    // Add streaming placeholder message — we'll update it in place
+    setMsgs(p => [...p, { id: STREAMING_ID, role: "assistant", content: "" }])
 
     let full = ""
     let finalSources: string[] = []
@@ -172,7 +175,10 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
               if (!initId) window.history.replaceState(null, "", `/chat/${ev.chatId}`)
             } else if (ev.type === "token") {
               full += ev.text
-              setStreamText(full)
+              // Update the streaming message in place — no separate state needed
+              setMsgs(p => p.map(m =>
+                m.id === STREAMING_ID ? { ...m, content: full } : m
+              ))
             } else if (ev.type === "done") {
               finalSources = ev.sources ?? []
             }
@@ -180,34 +186,25 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         }
       }
 
-      // All 3 state updates together — React 18 batches these in one render
-      // This prevents any blank flash between streaming and final message
-      setMsgs(p => [...p, {
-        id: Date.now() + "_ai",
-        role: "assistant",
-        content: full,
-        sources: finalSources,
-      }])
-      setStreamText("")
-      setStreaming(false)
+      // Replace streaming placeholder with final message
+      setMsgs(p => p.map(m =>
+        m.id === STREAMING_ID
+          ? { id: Date.now() + "_ai", role: "assistant", content: full, sources: finalSources }
+          : m
+      ))
 
     } catch (err: any) {
-      setMsgs(p => [...p, {
-        id: Date.now() + "_err",
-        role: "assistant",
-        content: `Sorry, something went wrong: ${err?.message ?? "Unknown error"}`,
-      }])
-      setStreamText("")
-      setStreaming(false)
+      setMsgs(p => p.map(m =>
+        m.id === STREAMING_ID
+          ? { id: Date.now() + "_err", role: "assistant", content: `Sorry, something went wrong: ${err?.message ?? "Unknown error"}` }
+          : m
+      ))
+    } finally {
+      setIsStreaming(false)
     }
   }
 
-  const empty = msgs.length === 0 && !streaming
-
-  // Show streaming bubble only when we have text AND still streaming
-  // Once streaming stops, the real message from msgs array takes over
-  const showStreamBubble = streaming && streamText.length > 0
-  const showTypingIndicator = streaming && streamText.length === 0
+  const empty = msgs.length === 0
 
   return (
     <div className="flex h-full overflow-hidden" style={{ background: T.bg }}>
@@ -245,16 +242,14 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
               </button>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto px-4 py-6 space-y-0.5">
-              {msgs.map(m => <MessageBubble key={m.id} msg={m} />)}
-              {showStreamBubble && (
+            <div className="max-w-3xl mx-auto px-4 py-6" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {msgs.map(m => (
                 <MessageBubble
-                  key="streaming"
-                  msg={{ id: "streaming", role: "assistant", content: streamText }}
-                  streaming
+                  key={m.id}
+                  msg={m}
+                  streaming={m.id === STREAMING_ID && isStreaming}
                 />
-              )}
-              {showTypingIndicator && <TypingIndicator />}
+              ))}
               <div ref={bottomRef} />
             </div>
           )}
@@ -265,7 +260,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
             <MessageInput
               onSend={send}
               onFilesSelected={setPendingFiles}
-              disabled={streaming || uploading}
+              disabled={isStreaming || uploading}
             />
             <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
               Responses are based on uploaded data only. Esti-Mate AI can make mistakes. Check important info.

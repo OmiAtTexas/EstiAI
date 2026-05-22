@@ -18,9 +18,6 @@ export function MessageBubble({ msg, streaming = false }: { msg: Message; stream
   const { T } = useTheme()
   const isUser = msg.role === "user"
 
-  // Don't render empty bubbles — this prevents the blank flash
-  if (!msg.content && !streaming) return null
-
   async function copy() {
     await navigator.clipboard.writeText(msg.content)
     setCopied(true)
@@ -28,7 +25,8 @@ export function MessageBubble({ msg, streaming = false }: { msg: Message; stream
   }
 
   return (
-    <div className={`flex gap-3 py-1.5 animate-fadein ${isUser ? "justify-end" : ""}`}>
+    <div className={`flex gap-3 py-1.5 ${isUser ? "justify-end" : ""}`}
+      style={{ animation: "fadein 0.15s ease-out" }}>
       {!isUser && (
         <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-bold"
           style={{ background: `${T.accent}15`, border: `1px solid ${T.accent}30`, color: T.accent }}>
@@ -36,7 +34,7 @@ export function MessageBubble({ msg, streaming = false }: { msg: Message; stream
         </div>
       )}
 
-      <div className={`max-w-[84%] space-y-1.5 ${isUser ? "items-end flex flex-col" : ""}`}>
+      <div style={{ maxWidth: "84%", display: "flex", flexDirection: "column", alignItems: isUser ? "flex-end" : "flex-start", gap: 6 }}>
         {/* Bubble */}
         <div className="rounded-2xl px-4 py-3 text-sm"
           style={isUser ? {
@@ -49,48 +47,48 @@ export function MessageBubble({ msg, streaming = false }: { msg: Message; stream
             border: `1px solid ${T.border}`,
             color: T.text,
             borderBottomLeftRadius: 4,
-            minHeight: 44, // prevent collapse when content loads
           }}>
           {isUser ? (
-            <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-          ) : (
-            <div className="md-wrap" style={{ color: T.text }}>
-              {msg.content ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-              ) : (
-                // Show dots while waiting for first token
-                <span style={{ color: T.faint }}>●●●</span>
-              )}
-              {streaming && (
+            <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.65, margin: 0 }}>{msg.content}</p>
+          ) : streaming ? (
+            // During streaming — use plain text to avoid ReactMarkdown delay
+            <div style={{ color: T.text, lineHeight: 1.65 }}>
+              <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                {msg.content}
                 <span className="inline-block w-1.5 h-[1.1em] ml-0.5 rounded-sm align-middle animate-blink"
                   style={{ background: T.accent }} />
-              )}
+              </p>
+            </div>
+          ) : (
+            // After streaming — use ReactMarkdown for formatting
+            <div className="md-wrap" style={{ color: T.text }}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
             </div>
           )}
         </div>
 
         {/* Source badges */}
-        {!isUser && msg.sources && msg.sources.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 px-1">
+        {!isUser && !streaming && msg.sources && msg.sources.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 4px" }}>
             {msg.sources.map(src => (
-              <span key={src} className="text-[10px] px-2 py-0.5 rounded-full"
-                style={{ background: `${T.accent}15`, color: T.accent, border: `1px solid ${T.accent}30` }}>
-                {src}
-              </span>
+              <span key={src} style={{
+                fontSize: 10, padding: "2px 8px", borderRadius: 20,
+                background: `${T.accent}15`, color: T.accent, border: `1px solid ${T.accent}30`
+              }}>{src}</span>
             ))}
           </div>
         )}
 
         {/* Actions */}
         {!isUser && !streaming && msg.content && (
-          <div className="flex items-center gap-0.5 px-1">
+          <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "0 4px" }}>
             <Btn onClick={copy} title="Copy" active={copied} activeColor="#22c55e" T={T}>
               {copied ? <Check size={13} color="#22c55e" /> : <Copy size={13} />}
             </Btn>
-            <Btn onClick={() => setVote("up")} title="Good response" active={vote === "up"} activeColor="#22c55e" T={T}>
+            <Btn onClick={() => setVote("up")} title="Good" active={vote === "up"} activeColor="#22c55e" T={T}>
               <ThumbsUp size={13} />
             </Btn>
-            <Btn onClick={() => setVote("down")} title="Poor response" active={vote === "down"} activeColor="#ef4444" T={T}>
+            <Btn onClick={() => setVote("down")} title="Poor" active={vote === "down"} activeColor="#ef4444" T={T}>
               <ThumbsDown size={13} />
             </Btn>
           </div>
@@ -103,8 +101,11 @@ export function MessageBubble({ msg, streaming = false }: { msg: Message; stream
 function Btn({ children, onClick, title, active, activeColor, T }: any) {
   return (
     <button onClick={onClick} title={title}
-      className="p-1.5 rounded-md transition-colors"
-      style={{ color: active ? activeColor : T.faint, background: active ? `${activeColor}15` : "transparent" }}
+      style={{
+        padding: 6, borderRadius: 6, border: "none", cursor: "pointer",
+        color: active ? activeColor : T.faint,
+        background: active ? `${activeColor}15` : "transparent"
+      }}
       onMouseEnter={e => { if (!active) e.currentTarget.style.color = T.muted }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.color = T.faint }}>
       {children}
