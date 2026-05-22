@@ -93,12 +93,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [msgs, streamText])
 
-  useEffect(() => {
-    if (!streaming) {
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100)
-    }
-  }, [streaming])
-
   async function handleUpload(temporary: boolean) {
     if (!pendingFiles) return
     const files = pendingFiles
@@ -146,9 +140,14 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
   async function send(text: string) {
     if (!text.trim() || streaming) return
-    setMsgs(p => [...p, { id: Date.now().toString(), role: "user", content: text }])
+
+    const userMsg: Message = { id: Date.now().toString(), role: "user", content: text }
+    setMsgs(p => [...p, userMsg])
     setStreaming(true)
     setStreamText("")
+
+    let full = ""
+    let finalSources: string[] = []
 
     try {
       const res = await fetch("/api/chat", {
@@ -160,9 +159,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
       const reader = res.body!.getReader()
       const dec = new TextDecoder()
-      let full = ""
-      let finalSources: string[] = []
-      let newChatId = chatId
 
       while (true) {
         const { done, value } = await reader.read()
@@ -172,7 +168,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           try {
             const ev = JSON.parse(line.slice(6))
             if (ev.type === "init") {
-              newChatId = ev.chatId
               setChatId(ev.chatId)
               if (!initId) window.history.replaceState(null, "", `/chat/${ev.chatId}`)
             } else if (ev.type === "token") {
@@ -185,22 +180,16 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         }
       }
 
-      // Add message FIRST, then clear stream text after a tick
-      // This prevents the blank flash between streaming and final message
+      // All 3 state updates together — React 18 batches these in one render
+      // This prevents any blank flash between streaming and final message
       setMsgs(p => [...p, {
         id: Date.now() + "_ai",
         role: "assistant",
         content: full,
         sources: finalSources,
       }])
-
-      // Clear stream text after React has rendered the new message
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setStreamText("")
-          setStreaming(false)
-        })
-      })
+      setStreamText("")
+      setStreaming(false)
 
     } catch (err: any) {
       setMsgs(p => [...p, {
@@ -214,6 +203,11 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   }
 
   const empty = msgs.length === 0 && !streaming
+
+  // Show streaming bubble only when we have text AND still streaming
+  // Once streaming stops, the real message from msgs array takes over
+  const showStreamBubble = streaming && streamText.length > 0
+  const showTypingIndicator = streaming && streamText.length === 0
 
   return (
     <div className="flex h-full overflow-hidden" style={{ background: T.bg }}>
@@ -253,10 +247,14 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           ) : (
             <div className="max-w-3xl mx-auto px-4 py-6 space-y-0.5">
               {msgs.map(m => <MessageBubble key={m.id} msg={m} />)}
-              {streaming && streamText && (
-                <MessageBubble msg={{ id: "streaming", role: "assistant", content: streamText }} streaming />
+              {showStreamBubble && (
+                <MessageBubble
+                  key="streaming"
+                  msg={{ id: "streaming", role: "assistant", content: streamText }}
+                  streaming
+                />
               )}
-              {streaming && !streamText && <TypingIndicator />}
+              {showTypingIndicator && <TypingIndicator />}
               <div ref={bottomRef} />
             </div>
           )}
