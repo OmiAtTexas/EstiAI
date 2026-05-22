@@ -1,5 +1,5 @@
 "use client"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { HardHat, Database, MessageSquare, X } from "lucide-react"
 import { MessageBubble, type Message } from "./MessageBubble"
 import { MessageInput } from "./MessageInput"
@@ -80,23 +80,26 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
   const [uploading, setUploading] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
-  const [activeDocIds, setActiveDocIds] = useState<string[]>([])
+
+  // Single source of truth for selected doc IDs
+  // null = not loaded yet, [] = loaded but none, [...] = loaded with IDs
+  const [activeDocIds, setActiveDocIds] = useState<string[] | null>(null)
+
   const bottomRef = useRef<HTMLDivElement>(null)
   const { T } = useTheme()
   const { toast } = useToast()
 
-  // Pre-load all permanent doc IDs immediately on mount
-  // This ensures activeDocIds is populated before the user sends their first message
+  // Load doc IDs once on mount — DocSelector will then control them
   useEffect(() => {
     fetch("/api/documents")
       .then(r => r.json())
       .then(d => {
         const ids = (d.documents ?? [])
           .filter((doc: any) => !doc.temporary)
-          .map((doc: any) => doc.id)
-        setActiveDocIds(ids)
+          .map((doc: any) => doc.id as string)
+        setActiveDocIds(ids) // start with all selected
       })
-      .catch(() => { }) // silently fail — no docs is fine
+      .catch(() => setActiveDocIds([]))
   }, [])
 
   useEffect(() => {
@@ -154,6 +157,11 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
   async function send(text: string) {
     if (!text.trim() || isStreaming) return
+    // Don't send if docs haven't loaded yet
+    if (activeDocIds === null) {
+      toast("Loading documents, please wait...", "info")
+      return
+    }
 
     setMsgs(p => [...p, { id: Date.now().toString(), role: "user", content: text }])
     setIsStreaming(true)
@@ -166,6 +174,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // Send exact activeDocIds at time of sending — no race condition
         body: JSON.stringify({ message: text, chatId, activeDocIds }),
       })
       if (!res.ok) throw new Error(`Server error ${res.status}`)
@@ -265,12 +274,10 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           )}
         </div>
 
-        {/* Input area */}
         <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
           <div className="max-w-3xl mx-auto px-4 pt-2 pb-1">
-            {/* Doc selector — only shows when 2+ permanent docs exist */}
             <DocSelector
-              activeDocIds={activeDocIds}
+              activeDocIds={activeDocIds ?? []}
               onSelectionChange={setActiveDocIds}
             />
           </div>
