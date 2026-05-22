@@ -17,7 +17,7 @@ CRITICAL RULES:
    - Comparison → side by side table
 4. Always quote exact numbers — never approximate
 5. Use markdown tables for cost data, breakdowns, comparisons
-6. Reference the sheet name when citing data (e.g. "From the Summary sheet:")
+6. Reference the sheet name when citing data
 7. If answer isn't in the documents → say "This information is not in the uploaded documents"
 
 UPLOADED FILES:`
@@ -26,20 +26,15 @@ const SYSTEM_NO_DOCS = `You are an estimating buddy — the internal AI assistan
 
 IDENTITY: If asked who built or created you, say: "Om More developed me and created me to help estimators working in construction companies." Never mention Anthropic or Claude.
 
-No documents are currently uploaded. Answer general construction cost questions helpfully. For project-specific data, ask the user to upload their Excel estimate file using the 📎 button or the Documents section in the sidebar.`
+No documents are currently uploaded. Answer general construction cost questions helpfully. For project-specific data, ask the user to upload their Excel estimate file using the 📎 button or the Documents section.`
 
 export type Msg = { role: "user" | "assistant"; content: string }
 
 function selectRelevantSheets(content: string, userMessage: string): string {
   const msgLower = userMessage.toLowerCase()
-
-  // Split content into individual sheets
   const sheetSections = content.split(/(?=\n?=== Sheet: )/).filter(s => s.trim())
 
-  if (sheetSections.length <= 1) {
-    // Only one sheet — return up to 20000 chars
-    return content.slice(0, 20000)
-  }
+  if (sheetSections.length <= 1) return content.slice(0, 20000)
 
   const selected: string[] = []
   const large: string[] = []
@@ -48,13 +43,8 @@ function selectRelevantSheets(content: string, userMessage: string): string {
     const nameMatch = section.match(/=== Sheet: (.+?) ===/)
     const sheetName = (nameMatch?.[1] ?? "").toLowerCase()
 
-    // Always include small sheets (under 4000 chars)
-    if (section.length < 4000) {
-      selected.push(section)
-      continue
-    }
+    if (section.length < 4000) { selected.push(section); continue }
 
-    // For large sheets, check if user is asking about them
     const isAskedFor =
       msgLower.includes(sheetName) ||
       (sheetName.includes("summary") && (msgLower.includes("summary") || msgLower.includes("total") || msgLower.includes("overview") || msgLower.includes("summarize"))) ||
@@ -65,44 +55,50 @@ function selectRelevantSheets(content: string, userMessage: string): string {
       (sheetName.includes("total vr") && (msgLower.includes("variance") || msgLower.includes(" vr") || msgLower.includes("total vr"))) ||
       (sheetName.includes("cover") && (msgLower.includes("cover") || msgLower.includes("project info")))
 
-    if (isAskedFor) {
-      selected.push(section)
-    } else {
-      large.push(section)
-    }
+    if (isAskedFor) selected.push(section)
+    else large.push(section)
   }
 
-  // If nothing specifically selected, include all small sheets + first large sheet truncated
   if (selected.filter(s => s.length >= 4000).length === 0 && large.length > 0) {
     selected.push(large[0].slice(0, 8000) + "\n\n[Sheet truncated — ask specifically about this sheet for full details]")
   }
 
   const result = selected.join("\n\n")
-
-  // Hard cap at 25000 chars to stay within token limits
   return result.length > 25000 ? result.slice(0, 25000) + "\n\n[Content truncated]" : result
 }
 
-export async function ragStream(userMessage: string, history: Msg[], chatId?: string) {
-  // Load documents for this context
+export async function ragStream(
+  userMessage: string,
+  history: Msg[],
+  chatId?: string,
+  activeDocIds?: string[] // IDs of docs user has selected
+) {
   const allDocs = await db.documentContent.findMany({
     include: {
       document: {
-        select: { name: true, projectName: true, temporary: true, chatId: true }
+        select: { id: true, name: true, projectName: true, temporary: true, chatId: true }
       }
     },
     orderBy: { createdAt: "desc" },
-    take: 5,
+    take: 10,
   })
 
-  // Strict filtering
-  const docs = allDocs.filter(d => {
+  let docs = allDocs.filter(d => {
     if (!d.document) return false
     if (!d.document.temporary) return true
     if (d.document.temporary && chatId && d.document.chatId === chatId) return true
     if (d.document.temporary && !d.document.chatId && chatId) return true
     return false
   })
+
+  // Filter by user-selected doc IDs if provided
+  if (activeDocIds && activeDocIds.length > 0) {
+    const permanentDocs = docs.filter(d => !d.document?.temporary)
+    const tempDocs = docs.filter(d => d.document?.temporary)
+    // Apply selection filter only to permanent docs — always include temp docs for this chat
+    const filteredPermanent = permanentDocs.filter(d => activeDocIds.includes(d.document!.id))
+    docs = [...filteredPermanent, ...tempDocs]
+  }
 
   let systemPrompt: string
 

@@ -7,6 +7,7 @@ import { TypingIndicator } from "./TypingIndicator"
 import { useTheme } from "@/components/layout/Sidebar"
 import { OnboardingModal } from "@/components/OnboardingModal"
 import { useToast } from "@/components/Toast"
+import { DocSelector } from "@/components/DocSelector"
 
 function StorageModal({ files, T, onConfirm, onCancel }: {
   files: File[]; T: any
@@ -79,6 +80,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
   const [uploading, setUploading] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [activeDocIds, setActiveDocIds] = useState<string[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const { T } = useTheme()
   const { toast } = useToast()
@@ -122,19 +124,15 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     }
 
     setUploading(false)
-
     if (uploaded.length > 0) toast(`${uploaded.join(", ")} uploaded`, "success")
     if (failed.length > 0) toast(`Upload failed: ${failed.join(", ")}`, "error")
 
     const lines: string[] = []
     if (uploaded.length > 0) {
       lines.push(`✅ **${uploaded.join(", ")}** uploaded successfully.`)
-      lines.push(temporary
-        ? "This file is only available in this chat. Ask me anything about it."
-        : "This file is saved to your Documents library and available in all chats. Ask me anything about it.")
+      lines.push(temporary ? "This file is only available in this chat. Ask me anything about it." : "This file is saved to your Documents library. Ask me anything about it.")
     }
     if (failed.length > 0) lines.push(`❌ Failed: ${failed.join(", ")}`)
-
     setMsgs(p => p.map(m => m.id === uploadingId ? { ...m, content: lines.join("\n\n") } : m))
   }
 
@@ -152,25 +150,21 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, chatId }),
+        // Pass selected doc IDs so server only uses those docs
+        body: JSON.stringify({ message: text, chatId, activeDocIds }),
       })
       if (!res.ok) throw new Error(`Server error ${res.status}`)
 
       const reader = res.body!.getReader()
       const dec = new TextDecoder()
-      let buffer = "" // ← KEY FIX: buffer handles partial SSE chunks from Vercel
+      let buffer = ""
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-
-        // Append to buffer instead of processing raw chunk directly
         buffer += dec.decode(value, { stream: true })
-
-        // Split on newlines but keep incomplete last line in buffer
         const lines = buffer.split("\n")
         buffer = lines.pop() ?? ""
-
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue
           const data = line.slice(6).trim()
@@ -190,28 +184,10 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         }
       }
 
-      // Flush remaining buffer
-      if (buffer.startsWith("data: ")) {
-        try {
-          const ev = JSON.parse(buffer.slice(6).trim())
-          if (ev.type === "token") full += ev.text
-        } catch { }
-      }
-
-      setMsgs(p => [...p, {
-        id: Date.now() + "_ai",
-        role: "assistant",
-        content: full || "Sorry, I didn't receive a response. Please try again.",
-        sources: finalSources,
-      }])
+      setMsgs(p => [...p, { id: Date.now() + "_ai", role: "assistant", content: full || "Sorry, I didn't receive a response. Please try again.", sources: finalSources }])
       setStreamText("")
-
     } catch (err: any) {
-      setMsgs(p => [...p, {
-        id: Date.now() + "_err",
-        role: "assistant",
-        content: `Sorry, something went wrong: ${err?.message ?? "Unknown error"}`,
-      }])
+      setMsgs(p => [...p, { id: Date.now() + "_err", role: "assistant", content: `Sorry, something went wrong: ${err?.message ?? "Unknown error"}` }])
       setStreamText("")
     } finally {
       setIsStreaming(false)
@@ -223,10 +199,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   return (
     <div className="flex h-full overflow-hidden" style={{ background: T.bg }}>
       {showOnboarding && (
-        <OnboardingModal onClose={() => {
-          setShowOnboarding(false)
-          localStorage.setItem("onboarded", "true")
-        }} />
+        <OnboardingModal onClose={() => { setShowOnboarding(false); localStorage.setItem("onboarded", "true") }} />
       )}
       {pendingFiles && (
         <StorageModal files={pendingFiles} T={T} onConfirm={handleUpload} onCancel={() => setPendingFiles(null)} />
@@ -255,10 +228,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
             <div className="max-w-3xl mx-auto px-4 py-6" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {msgs.map(m => <MessageBubble key={m.id} msg={m} />)}
               {isStreaming && streamText && (
-                <MessageBubble
-                  msg={{ id: "streaming", role: "assistant", content: streamText }}
-                  streaming
-                />
+                <MessageBubble msg={{ id: "streaming", role: "assistant", content: streamText }} streaming />
               )}
               {isStreaming && !streamText && <TypingIndicator />}
               <div ref={bottomRef} />
@@ -267,7 +237,11 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         </div>
 
         <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
-          <div className="max-w-3xl mx-auto px-4 py-4">
+          <div className="max-w-3xl mx-auto px-4 pt-2 pb-1">
+            {/* Doc selector — only shows when 2+ permanent docs exist */}
+            <DocSelector onSelectionChange={setActiveDocIds} />
+          </div>
+          <div className="max-w-3xl mx-auto px-4 pb-4">
             <MessageInput onSend={send} onFilesSelected={setPendingFiles} disabled={isStreaming || uploading} />
             <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
               Responses are based on uploaded data only. Esti-Mate AI can make mistakes. Check important info.
