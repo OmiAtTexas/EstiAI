@@ -53,7 +53,7 @@ export async function ragStream(userMessage: string, history: Msg[], chatId?: st
       }
     },
     orderBy: { createdAt: "desc" },
-    take: 10,
+    take: 3,
   })
 
   // Include docs that are:
@@ -69,9 +69,13 @@ export async function ragStream(userMessage: string, history: Msg[], chatId?: st
   })
 
   if (docs.length > 0) {
-    const context = docs.map(d =>
-      `=== ${d.document!.projectName || d.document!.name} ===\n${d.content}`
-    ).join("\n\n")
+    const context = docs.map(d => {
+      // Limit each document to 3000 characters to stay within token limits
+      const truncated = d.content.length > 3000
+        ? d.content.slice(0, 3000) + "\n... [truncated for length]"
+        : d.content
+      return `=== ${d.document!.projectName || d.document!.name} ===\n${truncated}`
+    }).join("\n\n")
 
     systemPrompt = `${SYSTEM}\n\nUPLOADED DOCUMENTS (use this data to answer questions):\n${context}`
     sources = docs.map(d => d.document!.name)
