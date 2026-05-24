@@ -1,6 +1,6 @@
 "use client"
 import { useState } from "react"
-import { Copy, Check, ThumbsUp, ThumbsDown } from "lucide-react"
+import { Copy, Check, ThumbsUp, ThumbsDown, X, ZoomIn } from "lucide-react"
 import { useTheme } from "@/components/layout/Sidebar"
 
 export type Message = {
@@ -8,12 +8,43 @@ export type Message = {
   role: "user" | "assistant"
   content: string
   sources?: string[]
-  imagePreviews?: string[] // base64 or blob URLs for display
+  imagePreviews?: string[]
+}
+
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: "rgba(0,0,0,0.9)" }}
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 p-2 rounded-full"
+        style={{ background: "rgba(255,255,255,0.1)", border: "none", cursor: "pointer", color: "#fff" }}
+      >
+        <X size={20} />
+      </button>
+      <img
+        src={src}
+        alt="Preview"
+        onClick={e => e.stopPropagation()}
+        style={{
+          maxWidth: "90vw",
+          maxHeight: "90vh",
+          objectFit: "contain",
+          borderRadius: 12,
+          boxShadow: "0 25px 60px rgba(0,0,0,0.5)",
+        }}
+      />
+    </div>
+  )
 }
 
 export function MessageBubble({ msg, streaming = false }: { msg: Message; streaming?: boolean }) {
   const [copied, setCopied] = useState(false)
   const [vote, setVote] = useState<"up" | "down" | null>(null)
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const { T } = useTheme()
   const isUser = msg.role === "user"
 
@@ -24,72 +55,98 @@ export function MessageBubble({ msg, streaming = false }: { msg: Message; stream
   }
 
   return (
-    <div style={{ display: "flex", gap: 12, padding: "6px 0", justifyContent: isUser ? "flex-end" : "flex-start" }}>
-      {!isUser && (
-        <div style={{
-          width: 28, height: 28, borderRadius: 8, flexShrink: 0, marginTop: 2,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 10, fontWeight: 700,
-          background: `${T.accent}15`, border: `1px solid ${T.accent}30`, color: T.accent
-        }}>Esti</div>
-      )}
+    <>
+      {/* Lightbox */}
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
 
-      <div style={{ maxWidth: "84%", display: "flex", flexDirection: "column", gap: 6, alignItems: isUser ? "flex-end" : "flex-start" }}>
-
-        {/* Image previews in user message */}
-        {isUser && msg.imagePreviews && msg.imagePreviews.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "flex-end" }}>
-            {msg.imagePreviews.map((src, i) => (
-              <img key={i} src={src} alt="attachment"
-                style={{ maxWidth: 200, maxHeight: 200, borderRadius: 10, border: `1px solid ${T.border}`, objectFit: "cover" }} />
-            ))}
-          </div>
+      <div style={{ display: "flex", gap: 12, padding: "6px 0", justifyContent: isUser ? "flex-end" : "flex-start" }}>
+        {!isUser && (
+          <div style={{
+            width: 28, height: 28, borderRadius: 8, flexShrink: 0, marginTop: 2,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 10, fontWeight: 700,
+            background: `${T.accent}15`, border: `1px solid ${T.accent}30`, color: T.accent
+          }}>Esti</div>
         )}
 
-        {/* Message bubble */}
-        <div style={{
-          borderRadius: 16, padding: "10px 16px", fontSize: 14,
-          ...(isUser ? {
-            background: T.accent, color: T.accentText,
-            fontWeight: 500, borderBottomRightRadius: 4,
-          } : {
-            background: T.surface, border: `1px solid ${T.border}`,
-            color: T.text, borderBottomLeftRadius: 4,
-          })
-        }}>
-          {isUser ? (
-            <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.65, margin: 0 }}>{msg.content}</p>
-          ) : (
-            <div style={{ color: T.text }}>
-              {streaming ? (
-                <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.65, margin: 0 }}>
-                  {msg.content}
-                  <span style={{ display: "inline-block", width: 6, height: "1.1em", marginLeft: 2, borderRadius: 2, verticalAlign: "middle", background: T.accent, animation: "blink .9s step-end infinite" }} />
-                </p>
-              ) : (
-                <MarkdownText text={msg.content} T={T} />
-              )}
+        <div style={{ maxWidth: "84%", display: "flex", flexDirection: "column", gap: 6, alignItems: isUser ? "flex-end" : "flex-start" }}>
+
+          {/* Clickable image previews */}
+          {isUser && msg.imagePreviews && msg.imagePreviews.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "flex-end" }}>
+              {msg.imagePreviews.map((src, i) => (
+                <div key={i} className="group relative" style={{ cursor: "pointer" }} onClick={() => setLightboxSrc(src)}>
+                  <img
+                    src={src}
+                    alt="attachment"
+                    style={{
+                      maxWidth: 200, maxHeight: 200,
+                      borderRadius: 10,
+                      border: `1px solid ${T.border}`,
+                      objectFit: "cover",
+                      display: "block",
+                      transition: "opacity 0.15s",
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.opacity = "0.85")}
+                    onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
+                  />
+                  {/* Zoom hint overlay */}
+                  <div
+                    className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ borderRadius: 10, background: "rgba(0,0,0,0.3)", pointerEvents: "none" }}
+                  >
+                    <ZoomIn size={20} color="#fff" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Message bubble */}
+          <div style={{
+            borderRadius: 16, padding: "10px 16px", fontSize: 14,
+            ...(isUser ? {
+              background: T.accent, color: T.accentText,
+              fontWeight: 500, borderBottomRightRadius: 4,
+            } : {
+              background: T.surface, border: `1px solid ${T.border}`,
+              color: T.text, borderBottomLeftRadius: 4,
+            })
+          }}>
+            {isUser ? (
+              <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.65, margin: 0 }}>{msg.content}</p>
+            ) : (
+              <div style={{ color: T.text }}>
+                {streaming ? (
+                  <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.65, margin: 0 }}>
+                    {msg.content}
+                    <span style={{ display: "inline-block", width: 6, height: "1.1em", marginLeft: 2, borderRadius: 2, verticalAlign: "middle", background: T.accent, animation: "blink .9s step-end infinite" }} />
+                  </p>
+                ) : (
+                  <MarkdownText text={msg.content} T={T} />
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          {!isUser && !streaming && msg.content && (
+            <div style={{ display: "flex", gap: 2 }}>
+              {[
+                { icon: copied ? <Check size={13} color="#22c55e" /> : <Copy size={13} />, fn: copy, title: "Copy", active: copied, col: "#22c55e" },
+                { icon: <ThumbsUp size={13} />, fn: () => setVote("up"), title: "Good", active: vote === "up", col: "#22c55e" },
+                { icon: <ThumbsDown size={13} />, fn: () => setVote("down"), title: "Poor", active: vote === "down", col: "#ef4444" },
+              ].map(({ icon, fn, title, active, col }, idx) => (
+                <button key={idx} onClick={fn} title={title} style={{
+                  padding: 6, borderRadius: 6, border: "none", cursor: "pointer",
+                  color: active ? col : T.faint, background: active ? `${col}15` : "transparent"
+                }}>{icon}</button>
+              ))}
             </div>
           )}
         </div>
-
-        {/* Action buttons */}
-        {!isUser && !streaming && msg.content && (
-          <div style={{ display: "flex", gap: 2 }}>
-            {[
-              { icon: copied ? <Check size={13} color="#22c55e" /> : <Copy size={13} />, fn: copy, title: "Copy", active: copied, col: "#22c55e" },
-              { icon: <ThumbsUp size={13} />, fn: () => setVote("up"), title: "Good", active: vote === "up", col: "#22c55e" },
-              { icon: <ThumbsDown size={13} />, fn: () => setVote("down"), title: "Poor", active: vote === "down", col: "#ef4444" },
-            ].map(({ icon, fn, title, active, col }, idx) => (
-              <button key={idx} onClick={fn} title={title} style={{
-                padding: 6, borderRadius: 6, border: "none", cursor: "pointer",
-                color: active ? col : T.faint, background: active ? `${col}15` : "transparent"
-              }}>{icon}</button>
-            ))}
-          </div>
-        )}
       </div>
-    </div>
+    </>
   )
 }
 
