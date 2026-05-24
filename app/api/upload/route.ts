@@ -27,42 +27,65 @@ export async function POST(req: NextRequest) {
   const name = file.name.toLowerCase()
   const isExcel = name.match(/\.(xlsm|xlsx|xls|csv)$/)
   if (!isExcel) {
-    return NextResponse.json({ error: "Only Excel files (.xlsx, .xlsm, .xls, .csv) are supported." }, { status: 400 })
+    return NextResponse.json({
+      error: "Only Excel files (.xlsx, .xlsm, .xls, .csv) are supported."
+    }, { status: 400 })
   }
 
   if (file.size > 4 * 1024 * 1024) {
-    return NextResponse.json({ error: "File too large. Maximum 4MB." }, { status: 413 })
+    return NextResponse.json({
+      error: "File too large. Maximum 4MB. Please try uploading again — the app will compress it automatically."
+    }, { status: 413 })
   }
 
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
 
   let extractedText = ""
+
   try {
-    if (name.endsWith(".csv") || file.type === "text/plain") {
+    // If file is plain text (pre-compressed by client), use directly
+    const contentType = file.type
+    if (contentType === "text/plain" || name.endsWith("_compressed.csv")) {
+      extractedText = buffer.toString("utf-8")
+    } else if (name.endsWith(".csv")) {
       extractedText = buffer.toString("utf-8")
     } else {
-      const workbook = XLSX.read(buffer, { type: "buffer", bookVBA: false, cellNF: false, cellHTML: false, cellStyles: false })
+      // Parse Excel/xlsm file
+      const workbook = XLSX.read(buffer, {
+        type: "buffer",
+        bookVBA: false,
+        cellNF: false,
+        cellHTML: false,
+        cellStyles: false,
+      })
       const sheets: string[] = []
       for (const sheetName of workbook.SheetNames) {
         const sheet = workbook.Sheets[sheetName]
         const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false })
-        if (csv.trim()) sheets.push("=== Sheet: " + sheetName + " ===\n" + csv)
+        if (csv.trim()) {
+          sheets.push(`=== Sheet: ${sheetName} ===\n${csv}`)
+        }
       }
       extractedText = sheets.join("\n\n")
     }
   } catch (e: any) {
-    return NextResponse.json({ error: "Could not parse file: " + (e?.message ?? "Unknown error") }, { status: 400 })
+    console.error("Parse error:", e)
+    return NextResponse.json({
+      error: `Could not parse file: ${e?.message ?? "Unknown error"}`
+    }, { status: 400 })
   }
 
-  if (!extractedText.trim()) return NextResponse.json({ error: "File appears to be empty." }, { status: 400 })
+  if (!extractedText.trim()) {
+    return NextResponse.json({ error: "File appears to be empty." }, { status: 400 })
+  }
 
   const doc = await db.document.create({
     data: {
       name: file.name,
       projectName: projectName || file.name.replace(/\.[^.]+$/, ""),
       location,
-      blobUrl: "db://" + Date.now() + "_" + file.name,
+      blobUrl: `db://${Date.now()}_${file.name}`,
       fileType: "excel",
       fileSize: file.size,
       status: "ready",
@@ -73,7 +96,11 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  await db.documentContent.create({ data: { documentId: doc.id, content: extractedText } })
+  await db.documentContent.create({
+    data: { documentId: doc.id, content: extractedText },
+  })
 
-  return NextResponse.json({ doc: { id: doc.id, name: doc.name, status: "ready", temporary } })
+  return NextResponse.json({
+    doc: { id: doc.id, name: doc.name, status: "ready", temporary }
+  })
 }
