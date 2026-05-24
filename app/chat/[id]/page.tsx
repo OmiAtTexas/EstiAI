@@ -17,7 +17,7 @@ export default async function ChatPage({
     where: { id, userId: session.user.id },
     include: { messages: { orderBy: { createdAt: "asc" } } },
   })
-  if (!chat) notFound()
+  if (!chat) redirect("/chat")
 
   const messages = chat.messages.map(m => ({
     id: m.id,
