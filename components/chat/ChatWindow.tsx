@@ -2,13 +2,22 @@
 import { useState, useRef, useEffect } from "react"
 import { HardHat } from "lucide-react"
 import { MessageBubble, type Message } from "./MessageBubble"
-import { MessageInput } from "./MessageInput"
+import { MessageInput, type AttachedFile } from "./MessageInput"
 import { TypingIndicator } from "./TypingIndicator"
 import { useTheme } from "@/components/layout/Sidebar"
 import { OnboardingModal } from "@/components/OnboardingModal"
 import { useToast } from "@/components/Toast"
 
 type DocInfo = { id: string; name: string; projectName?: string }
+
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(",")[1])
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
 
 export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   chatId: string | null; messages: Message[]
@@ -25,7 +34,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const { T } = useTheme()
   const { toast } = useToast()
 
-  // Load permanent docs on mount for badge toggling
   useEffect(() => {
     fetch("/api/documents")
       .then(r => r.json())
@@ -49,21 +57,17 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [msgs, streamText])
 
-  // All uploads are chat-only — no modal, no permanent storage
   async function handleFiles(files: File[]) {
     if (files.length === 0) return
     setUploading(true)
-
     const uploadingId = Date.now().toString() + "_upload"
     setMsgs(p => [...p, { id: uploadingId, role: "assistant", content: `⏳ Uploading **${files.map(f => f.name).join(", ")}**…` }])
-
     const uploaded: string[] = []
     const failed: string[] = []
-
     for (const f of files) {
       const fd = new FormData()
       fd.append("file", f)
-      fd.append("temporary", "true") // always temporary — chat only
+      fd.append("temporary", "true")
       if (chatId) fd.append("chatId", chatId)
       try {
         const r = await fetch("/api/upload", { method: "POST", body: fd })
@@ -75,45 +79,39 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         failed.push(`${f.name}: ${err?.message ?? "Network error"}`)
       }
     }
-
     setUploading(false)
-    if (uploaded.length > 0) toast(`${uploaded.join(", ")} ready — ask me anything about it`, "success")
+    if (uploaded.length > 0) toast(`${uploaded.join(", ")} ready`, "success")
     if (failed.length > 0) toast(`Upload failed: ${failed.join(", ")}`, "error")
-
     const lines: string[] = []
-    if (uploaded.length > 0) {
-      lines.push(`✅ **${uploaded.join(", ")}** uploaded successfully.`)
-      lines.push("Ask me anything about it.")
-    }
+    if (uploaded.length > 0) { lines.push(`✅ **${uploaded.join(", ")}** uploaded. Ask me anything about it.`) }
     if (failed.length > 0) lines.push(`❌ Failed: ${failed.join(", ")}`)
     setMsgs(p => p.map(m => m.id === uploadingId ? { ...m, content: lines.join("\n\n") } : m))
   }
 
-  function toggleDocByName(docName: string) {
-    if (!activeDocIds) return
-    const doc = allDocs.find(d => d.name === docName || d.projectName === docName)
-    if (!doc) return
-    const isActive = activeDocIds.includes(doc.id)
-    if (isActive) {
-      if (activeDocIds.length === 1) { toast("At least one document must be selected", "warning"); return }
-      const newIds = activeDocIds.filter(id => id !== doc.id)
-      setActiveDocIds(newIds)
-      const remaining = allDocs.filter(d => newIds.includes(d.id)).map(d => d.projectName || d.name)
-      toast(`Now referring to: ${remaining.join(", ")}`, "info")
-    } else {
-      const newIds = [...activeDocIds, doc.id]
-      setActiveDocIds(newIds)
-      toast(`Now referring to: ${allDocs.filter(d => newIds.includes(d.id)).map(d => d.projectName || d.name).join(", ")}`, "success")
-    }
-  }
-
-  async function send(text: string) {
-    if (!text.trim() || isStreaming) return
+  async function send(text: string, attachedImages?: AttachedFile[]) {
+    if (!text.trim() && (!attachedImages || attachedImages.length === 0)) return
+    if (isStreaming) return
     if (activeDocIds === null) { toast("Loading, please wait...", "info"); return }
 
-    setMsgs(p => [...p, { id: Date.now().toString(), role: "user", content: text }])
+    // Show user message with image previews
+    const userMsgId = Date.now().toString()
+    const imagePreviews = attachedImages?.map(a => (a as any).previewUrl) ?? []
+    setMsgs(p => [...p, {
+      id: userMsgId,
+      role: "user",
+      content: text || "What's in this image?",
+      imagePreviews,
+    }])
     setIsStreaming(true)
     setStreamText("")
+
+    // Convert images to base64
+    const imagePayloads = attachedImages
+      ? await Promise.all(attachedImages.map(async a => ({
+        base64: await fileToBase64(a.file),
+        mimeType: a.file.type || "image/png",
+      })))
+      : []
 
     let full = ""
     let finalSources: string[] = []
@@ -122,14 +120,18 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, chatId, activeDocIds }),
+        body: JSON.stringify({
+          message: text || "What's in this image?",
+          chatId,
+          activeDocIds,
+          images: imagePayloads,
+        }),
       })
       if (!res.ok) throw new Error(`Server error ${res.status}`)
 
       const reader = res.body!.getReader()
       const dec = new TextDecoder()
       let buffer = ""
-
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -192,7 +194,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
               </div>
               <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>What can I help you estimate?</h3>
               <p className="text-sm text-center max-w-md leading-relaxed" style={{ color: T.muted }}>
-                Upload an Excel file using the 📎 button below and ask anything about it — costs, breakdowns, comparisons, line items.
+                Upload an Excel file using 📎 or paste/upload a screenshot using 🖼️. Ask anything about costs, breakdowns, or comparisons.
               </p>
               <button onClick={() => setShowOnboarding(true)}
                 className="mt-6 text-xs px-3 py-1.5 rounded-lg"
@@ -202,12 +204,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto px-4 py-6" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {msgs.map(m => (
-                <MessageBubble
-                  key={m.id}
-                  msg={m}
-                />
-              ))}
+              {msgs.map(m => <MessageBubble key={m.id} msg={m} />)}
               {isStreaming && streamText && (
                 <MessageBubble msg={{ id: "streaming", role: "assistant", content: streamText }} streaming />
               )}
@@ -221,7 +218,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           <div className="max-w-3xl mx-auto px-4 py-4">
             <MessageInput onSend={send} onFilesSelected={handleFiles} disabled={isStreaming || uploading} />
             <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
-              Responses are based on uploaded data only. Esti-Mate AI can make mistakes. Check important info.
+              Paste images with Cmd+V · Attach Excel files with 📎 · Esti-Mate AI can make mistakes.
             </p>
           </div>
         </div>

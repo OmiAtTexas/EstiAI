@@ -8,15 +8,10 @@ export type Message = {
   role: "user" | "assistant"
   content: string
   sources?: string[]
+  imagePreviews?: string[] // base64 or blob URLs for display
 }
 
-export function MessageBubble({
-  msg,
-  streaming = false,
-}: {
-  msg: Message
-  streaming?: boolean
-}) {
+export function MessageBubble({ msg, streaming = false }: { msg: Message; streaming?: boolean }) {
   const [copied, setCopied] = useState(false)
   const [vote, setVote] = useState<"up" | "down" | null>(null)
   const { T } = useTheme()
@@ -40,6 +35,18 @@ export function MessageBubble({
       )}
 
       <div style={{ maxWidth: "84%", display: "flex", flexDirection: "column", gap: 6, alignItems: isUser ? "flex-end" : "flex-start" }}>
+
+        {/* Image previews in user message */}
+        {isUser && msg.imagePreviews && msg.imagePreviews.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "flex-end" }}>
+            {msg.imagePreviews.map((src, i) => (
+              <img key={i} src={src} alt="attachment"
+                style={{ maxWidth: 200, maxHeight: 200, borderRadius: 10, border: `1px solid ${T.border}`, objectFit: "cover" }} />
+            ))}
+          </div>
+        )}
+
+        {/* Message bubble */}
         <div style={{
           borderRadius: 16, padding: "10px 16px", fontSize: 14,
           ...(isUser ? {
@@ -66,7 +73,7 @@ export function MessageBubble({
           )}
         </div>
 
-        {/* Action buttons — no source badges */}
+        {/* Action buttons */}
         {!isUser && !streaming && msg.content && (
           <div style={{ display: "flex", gap: 2 }}>
             {[
