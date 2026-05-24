@@ -213,10 +213,8 @@ export function Sidebar({ user }: { user: User }) {
   async function deleteChat(id: string) {
     await fetch(`/api/chats?id=${id}`, { method: "DELETE" })
     setChats(p => p.filter(c => c.id !== id))
-    // If currently viewing the deleted chat, redirect to new chat page
     if (pathname === `/chat/${id}`) {
-      router.push("/chat")
-      router.refresh()
+      window.location.href = "/chat"
     }
   }
 
