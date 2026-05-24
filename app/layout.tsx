@@ -7,9 +7,9 @@ export const metadata: Metadata = {
   title: "EstimateAI — Construction Cost Intelligence",
   description: "Internal AI assistant for construction cost management",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-    apple: "/favicon.svg",
+    icon: "public/tab logo.png",
+    shortcut: "public/favicon.svg",
+    apple: "public/favicon.svg",
   },
 }
 
@@ -17,7 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="icon" type="image/svg+xml" href="public/tab logo.png" />
       </head>
       <body>
         <SessionProvider>
