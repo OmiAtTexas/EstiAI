@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react"
 import {
   HardHat, Plus, MessageSquare, Settings,
   Trash2, PanelLeft, Pin, PinOff, Pencil, MoreHorizontal,
-  LogOut, HelpCircle, ChevronRight, Moon, Sun
+  LogOut, HelpCircle, ChevronRight, Moon, Sun, Search, X
 } from "lucide-react"
 type Chat = { id: string; title: string; updatedAt: string; pinned?: boolean }
 type User = { name?: string | null; email?: string | null; image?: string | null }
@@ -189,6 +189,7 @@ export function Sidebar({ user }: { user: User }) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [search, setSearch] = useState("")
   const { isDark, T, toggle } = useTheme()
   const pathname = usePathname()
   const router = useRouter()
@@ -223,8 +224,13 @@ export function Sidebar({ user }: { user: User }) {
     setRenamingId(null)
   }
 
-  const pinnedChats = chats.filter(c => c.pinned)
-  const unpinned = chats.filter(c => !c.pinned)
+  // Filter chats by search
+  const filtered = search.trim()
+    ? chats.filter(c => c.title.toLowerCase().includes(search.toLowerCase()))
+    : chats
+
+  const pinnedChats = filtered.filter(c => c.pinned)
+  const unpinned = filtered.filter(c => !c.pinned)
   const groups = [
     { label: "Pinned", items: pinnedChats },
     { label: "Today", items: unpinned.filter(c => diffHours(c.updatedAt) < 24) },
@@ -270,10 +276,46 @@ export function Sidebar({ user }: { user: User }) {
 
       {/* Chat history */}
       {open && (
-        <div className="flex-1 overflow-y-auto px-2">
-          {chats.length === 0 && (
+        <div className="flex-1 overflow-y-auto px-2 flex flex-col">
+
+          {/* Search bar */}
+          <div className="relative mb-2 mt-1 shrink-0">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ color: T.faint }} />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search chats…"
+              className="w-full text-xs rounded-lg focus:outline-none"
+              style={{
+                background: T.surfHover,
+                border: `1px solid ${search ? T.accent + "60" : T.border}`,
+                color: T.text,
+                padding: "6px 28px 6px 28px",
+              }}
+            />
+            {search && (
+              <button onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded"
+                style={{ color: T.faint, background: "none", border: "none", cursor: "pointer" }}>
+                <X size={11} />
+              </button>
+            )}
+          </div>
+
+          {/* No results */}
+          {search && filtered.length === 0 && (
+            <p className="text-xs px-2 py-3 text-center" style={{ color: T.faint }}>
+              No chats found for "{search}"
+            </p>
+          )}
+
+          {/* No chats at all */}
+          {!search && chats.length === 0 && (
             <p className="text-xs px-2 py-3 text-center" style={{ color: T.faint }}>No chats yet</p>
           )}
+
+          {/* Chat groups */}
           {groups.map(({ label, items }) => items.length === 0 ? null : (
             <div key={label} className="mb-1">
               <p className="text-[10px] font-semibold uppercase tracking-wider px-2 py-1.5 flex items-center gap-1"
