@@ -1,6 +1,6 @@
 "use client"
 import { useState } from "react"
-import { Copy, Check, ThumbsUp, ThumbsDown, X, ZoomIn } from "lucide-react"
+import { Copy, Check, ThumbsUp, ThumbsDown, X, ZoomIn, FileSpreadsheet } from "lucide-react"
 import { useTheme } from "@/components/layout/Sidebar"
 
 export type Message = {
@@ -9,34 +9,20 @@ export type Message = {
   content: string
   sources?: string[]
   imagePreviews?: string[]
+  fileAttachments?: { type: string; name: string }[]
 }
 
 function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+    <div className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ background: "rgba(0,0,0,0.9)" }}
-      onClick={onClose}
-    >
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 p-2 rounded-full"
-        style={{ background: "rgba(255,255,255,0.1)", border: "none", cursor: "pointer", color: "#fff" }}
-      >
+      onClick={onClose}>
+      <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-full"
+        style={{ background: "rgba(255,255,255,0.1)", border: "none", cursor: "pointer", color: "#fff" }}>
         <X size={20} />
       </button>
-      <img
-        src={src}
-        alt="Preview"
-        onClick={e => e.stopPropagation()}
-        style={{
-          maxWidth: "90vw",
-          maxHeight: "90vh",
-          objectFit: "contain",
-          borderRadius: 12,
-          boxShadow: "0 25px 60px rgba(0,0,0,0.5)",
-        }}
-      />
+      <img src={src} alt="Preview" onClick={e => e.stopPropagation()}
+        style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 25px 60px rgba(0,0,0,0.5)" }} />
     </div>
   )
 }
@@ -56,7 +42,6 @@ export function MessageBubble({ msg, streaming = false }: { msg: Message; stream
 
   return (
     <>
-      {/* Lightbox */}
       {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
 
       <div style={{ display: "flex", gap: 12, padding: "6px 0", justifyContent: isUser ? "flex-end" : "flex-start" }}>
@@ -76,27 +61,30 @@ export function MessageBubble({ msg, streaming = false }: { msg: Message; stream
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "flex-end" }}>
               {msg.imagePreviews.map((src, i) => (
                 <div key={i} className="group relative" style={{ cursor: "pointer" }} onClick={() => setLightboxSrc(src)}>
-                  <img
-                    src={src}
-                    alt="attachment"
-                    style={{
-                      maxWidth: 200, maxHeight: 200,
-                      borderRadius: 10,
-                      border: `1px solid ${T.border}`,
-                      objectFit: "cover",
-                      display: "block",
-                      transition: "opacity 0.15s",
-                    }}
+                  <img src={src} alt="attachment"
+                    style={{ maxWidth: 200, maxHeight: 200, borderRadius: 10, border: `1px solid ${T.border}`, objectFit: "cover", display: "block" }}
                     onMouseEnter={e => (e.currentTarget.style.opacity = "0.85")}
-                    onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
-                  />
-                  {/* Zoom hint overlay */}
-                  <div
-                    className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ borderRadius: 10, background: "rgba(0,0,0,0.3)", pointerEvents: "none" }}
-                  >
+                    onMouseLeave={e => (e.currentTarget.style.opacity = "1")} />
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ borderRadius: 10, background: "rgba(0,0,0,0.3)", pointerEvents: "none" }}>
                     <ZoomIn size={20} color="#fff" />
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* File attachment cards — shown on assistant messages */}
+          {!isUser && msg.fileAttachments && msg.fileAttachments.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {msg.fileAttachments.map((f, i) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "6px 12px", borderRadius: 10,
+                  background: `${T.accent}12`, border: `1px solid ${T.accent}30`,
+                }}>
+                  <FileSpreadsheet size={14} color={T.accent} />
+                  <span style={{ fontSize: 12, color: T.text, fontWeight: 500 }}>{f.name}</span>
                 </div>
               ))}
             </div>

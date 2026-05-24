@@ -60,15 +60,19 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   async function handleFiles(files: File[]) {
     if (files.length === 0) return
     setUploading(true)
+
     const uploadingId = Date.now().toString() + "_upload"
     setMsgs(p => [...p, { id: uploadingId, role: "assistant", content: `⏳ Uploading **${files.map(f => f.name).join(", ")}**…` }])
+
     const uploaded: string[] = []
     const failed: string[] = []
+    let currentChatId = chatId
+
     for (const f of files) {
       const fd = new FormData()
       fd.append("file", f)
       fd.append("temporary", "true")
-      if (chatId) fd.append("chatId", chatId)
+      if (currentChatId) fd.append("chatId", currentChatId)
       try {
         const r = await fetch("/api/upload", { method: "POST", body: fd })
         let data: any = {}
@@ -79,13 +83,33 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         failed.push(`${f.name}: ${err?.message ?? "Network error"}`)
       }
     }
+
     setUploading(false)
     if (uploaded.length > 0) toast(`${uploaded.join(", ")} ready`, "success")
     if (failed.length > 0) toast(`Upload failed: ${failed.join(", ")}`, "error")
+
     const lines: string[] = []
-    if (uploaded.length > 0) { lines.push(`✅ **${uploaded.join(", ")}** uploaded. Ask me anything about it.`) }
+    if (uploaded.length > 0) lines.push(`✅ **${uploaded.join(", ")}** uploaded. Ask me anything about it.`)
     if (failed.length > 0) lines.push(`❌ Failed: ${failed.join(", ")}`)
-    setMsgs(p => p.map(m => m.id === uploadingId ? { ...m, content: lines.join("\n\n") } : m))
+
+    const finalContent = lines.join("\n\n")
+    const fileAttachments = uploaded.map(name => ({ type: "excel", name }))
+
+    // Update message in UI with file attachment cards
+    setMsgs(p => p.map(m => m.id === uploadingId ? {
+      ...m,
+      content: finalContent,
+      fileAttachments,
+    } : m))
+
+    // Save to DB so it persists across navigation
+    if (currentChatId && uploaded.length > 0) {
+      await fetch("/api/chat/upload-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId: currentChatId, content: finalContent, attachments: fileAttachments })
+      })
+    }
   }
 
   async function send(text: string, attachedImages?: AttachedFile[]) {
@@ -93,7 +117,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     if (isStreaming) return
     if (activeDocIds === null) { toast("Loading, please wait...", "info"); return }
 
-    // Show user message with image previews
     const userMsgId = Date.now().toString()
     const imagePreviews = attachedImages?.map(a => (a as any).previewUrl) ?? []
     setMsgs(p => [...p, {
@@ -105,7 +128,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     setIsStreaming(true)
     setStreamText("")
 
-    // Convert images to base64
     const imagePayloads = attachedImages
       ? await Promise.all(attachedImages.map(async a => ({
         base64: await fileToBase64(a.file),
@@ -132,6 +154,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       const reader = res.body!.getReader()
       const dec = new TextDecoder()
       let buffer = ""
+
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -145,8 +168,24 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           try {
             const ev = JSON.parse(data)
             if (ev.type === "init") {
-              setChatId(ev.chatId)
-              if (!initId) window.history.replaceState(null, "", `/chat/${ev.chatId}`)
+              const newChatId = ev.chatId
+              setChatId(newChatId)
+              if (!initId) window.history.replaceState(null, "", `/chat/${newChatId}`)
+
+              // Now that chatId exists, save any pending upload messages that weren't saved
+              // (uploaded before first message created the chat)
+              const pendingUploads = msgs.filter(m => m.fileAttachments && m.fileAttachments.length > 0)
+              for (const m of pendingUploads) {
+                await fetch("/api/chat/upload-message", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chatId: newChatId,
+                    content: m.content,
+                    attachments: m.fileAttachments
+                  })
+                })
+              }
             } else if (ev.type === "token") {
               full += ev.text
               setStreamText(full)
@@ -194,7 +233,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
               </div>
               <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>What can I help you estimate?</h3>
               <p className="text-sm text-center max-w-md leading-relaxed" style={{ color: T.muted }}>
-                Upload an Excel file using 📎 or paste/upload a screenshot using 🖼️. Ask anything about costs, breakdowns, or comparisons.
+                Upload an Excel file using 📎 or paste a screenshot with Cmd+V. Ask anything about costs, breakdowns, or comparisons.
               </p>
               <button onClick={() => setShowOnboarding(true)}
                 className="mt-6 text-xs px-3 py-1.5 rounded-lg"
@@ -218,7 +257,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           <div className="max-w-3xl mx-auto px-4 py-4">
             <MessageInput onSend={send} onFilesSelected={handleFiles} disabled={isStreaming || uploading} />
             <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
-              Paste images with Cmd+V · Attach Excel files with 📎 · Esti-Mate AI can make mistakes.
+              Paste images with Cmd+V · Attach Excel with 📎 · Esti-Mate AI can make mistakes.
             </p>
           </div>
         </div>
