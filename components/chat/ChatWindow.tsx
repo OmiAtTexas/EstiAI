@@ -206,9 +206,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
                 <MessageBubble
                   key={m.id}
                   msg={m}
-                  activeDocIds={activeDocIds ?? []}
-                  allDocs={allDocs}
-                  onToggleDoc={toggleDocByName}
                 />
               ))}
               {isStreaming && streamText && (
