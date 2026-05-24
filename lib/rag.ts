@@ -59,7 +59,6 @@ function selectRelevantSheets(content: string, userMessage: string): string {
     if (isAskedFor) selected.push(section)
     else large.push(section)
   }
-
   if (selected.filter(s => s.length >= 4000).length === 0 && large.length > 0) {
     selected.push(large[0].slice(0, 8000) + "\n\n[Sheet truncated — ask specifically about this sheet for full details]")
   }
@@ -68,12 +67,7 @@ function selectRelevantSheets(content: string, userMessage: string): string {
   return result.length > 25000 ? result.slice(0, 25000) + "\n\n[Content truncated]" : result
 }
 
-export async function ragStream(
-  userMessage: string,
-  history: Msg[],
-  chatId?: string,
-  activeDocIds?: string[] // IDs of docs user has selected
-) {
+export async function ragStream(userMessage: string, history: Msg[], chatId?: string, activeDocIds?: string[], userId?: string) {
   const allDocs = await db.documentContent.findMany({
     include: {
       document: {
