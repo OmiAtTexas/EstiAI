@@ -34,10 +34,8 @@ export type Msg = { role: "user" | "assistant"; content: string }
 function buildContext(content: string, userMessage: string): string {
   const msgLower = userMessage.toLowerCase()
   const sheetSections = content.split(/(?=\n?=== Sheet: )/).filter(s => s.trim())
-
   if (sheetSections.length <= 1) return content
 
-  // If user asks about a specific sheet — send it FULLY
   for (const section of sheetSections) {
     const nameMatch = section.match(/=== Sheet: (.+?) ===/)
     const sheetName = (nameMatch?.[1] ?? "").toLowerCase()
@@ -48,7 +46,6 @@ function buildContext(content: string, userMessage: string): string {
     }
   }
 
-  // General question — all sheets proportionally
   const BUDGET = 40000
   const small = sheetSections.filter(s => s.length <= 4000)
   const large = sheetSections.filter(s => s.length > 4000)
@@ -62,17 +59,39 @@ function buildContext(content: string, userMessage: string): string {
   return [...small, ...trimmed].join("\n\n")
 }
 
-export async function ragStream(userMessage: string, history: Msg[], chatId?: string, activeDocIds?: string[]) {
-  // ONLY load documents uploaded in this specific chat — nothing else
-  const docs = chatId ? await db.documentContent.findMany({
-    where: { document: { chatId } },
-    include: { document: { select: { id: true, name: true, projectName: true } } },
-    orderBy: { createdAt: "desc" },
-  }) : []
+export async function ragStream(userMessage: string, history: Msg[], chatId?: string, activeDocIds?: string[], userId?: string) {
+  let docs: any[] = []
+
+  if (chatId) {
+    // Load docs for this specific chat
+    docs = await db.documentContent.findMany({
+      where: { document: { chatId } },
+      include: { document: { select: { id: true, name: true, projectName: true } } },
+      orderBy: { createdAt: "desc" },
+    })
+  }
+
+  // If no docs found and we have userId, look for very recent uploads with no chatId
+  // This handles the case where file is uploaded before first message creates the chat
+  if (docs.length === 0 && userId) {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+    docs = await db.documentContent.findMany({
+      where: {
+        document: {
+          uploadedBy: userId,
+          chatId: null,
+          temporary: true,
+          createdAt: { gte: fiveMinutesAgo }
+        }
+      },
+      include: { document: { select: { id: true, name: true, projectName: true } } },
+      orderBy: { createdAt: "desc" },
+    })
+  }
 
   let systemPrompt: string
   if (docs.length > 0) {
-    const context = docs.map(d => {
+    const context = docs.map((d: any) => {
       const name = d.document!.projectName || d.document!.name
       return `\n${"=".repeat(60)}\nFILE: ${name}\n${"=".repeat(60)}\n${buildContext(d.content, userMessage)}`
     }).join("\n\n")
@@ -82,7 +101,7 @@ export async function ragStream(userMessage: string, history: Msg[], chatId?: st
   }
 
   const messages: Anthropic.MessageParam[] = [
-    ...history.slice(-8).map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+    ...history.slice(-8).map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content })),
     { role: "user", content: userMessage },
   ]
 
@@ -99,5 +118,5 @@ export async function ragStream(userMessage: string, history: Msg[], chatId?: st
     }
   }
 
-  return { tokens: tokens(), sources: [...new Set(docs.map(d => d.document!.name))] }
+  return { tokens: tokens(), sources: [...new Set(docs.map((d: any) => d.document!.name))] }
 }

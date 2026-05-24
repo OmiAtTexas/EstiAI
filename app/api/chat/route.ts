@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   }))
 
   try {
-    const { tokens, sources } = await ragStream(message, history, chat.id, activeDocIds)
+    const { tokens, sources } = await ragStream(message, history, chat.id, activeDocIds, userId)
     let full = ""
 
     const body = new ReadableStream({
