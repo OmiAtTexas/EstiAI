@@ -24,6 +24,7 @@ export default async function ChatPage({
     role: m.role as "user" | "assistant",
     content: m.content,
     sources: m.sources ? JSON.parse(m.sources) : [],
+    imagePreviews: m.attachments ? JSON.parse(m.attachments) : [],
   }))
 
   return <ChatWindow chatId={chat.id} messages={messages} />

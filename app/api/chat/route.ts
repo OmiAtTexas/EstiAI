@@ -35,7 +35,17 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  await db.message.create({ data: { chatId: chat.id, role: "user", content: message || "Image attached" } })
+  await db.message.create({
+    data: {
+      chatId: chat.id,
+      role: "user",
+      content: message || "Image attached",
+      // Store image base64 so they persist across navigation
+      attachments: images && images.length > 0
+        ? JSON.stringify(images.map((img: any) => `data:${img.mimeType};base64,${img.base64}`))
+        : null,
+    }
+  })
 
   const history = chat.messages.map(m => ({
     role: m.role as "user" | "assistant",
@@ -77,7 +87,12 @@ export async function POST(req: NextRequest) {
       const full = response.content[0].type === "text" ? response.content[0].text : ""
 
       await db.message.create({
-        data: { chatId: chat.id, role: "assistant", content: full, sources: JSON.stringify([]) },
+        data: {
+          chatId: chat.id,
+          role: "assistant",
+          content: full,
+          sources: JSON.stringify([]),
+        }
       })
 
       // Update title after 3rd message
