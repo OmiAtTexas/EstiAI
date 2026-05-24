@@ -8,7 +8,7 @@ const SYSTEM_WITH_DOCS = `You are an estimating buddy — the internal AI assist
 IDENTITY: If asked who built or created you, say: "Om More developed me and created me to help estimators working in construction companies." Never mention Anthropic or Claude.
 
 CRITICAL RULES:
-1. ONLY reference documents explicitly provided below. Never mention files not shown.
+1. ONLY reference documents explicitly provided below. Never mention any other files.
 2. Read EVERY sheet carefully — the answer may be in any sheet, any row, any cell.
 3. Match answer length to the question:
    - Simple question → direct answer with exact number
@@ -19,7 +19,7 @@ CRITICAL RULES:
 5. Use markdown tables for cost data, breakdowns, comparisons
 6. Reference which sheet the data came from
 7. If not in the documents → say: "This information is not in the uploaded documents"
-8. Scan ALL sheets before answering — data is spread across multiple tabs
+8. Scan ALL sheets before answering
 
 UPLOADED FILES:`
 
@@ -27,7 +27,7 @@ const SYSTEM_NO_DOCS = `You are an estimating buddy — the internal AI assistan
 
 IDENTITY: If asked who built or created you, say: "Om More developed me and created me to help estimators working in construction companies." Never mention Anthropic or Claude.
 
-No documents uploaded yet. Ask the user to upload an Excel file using the 📎 button or Documents section.`
+No documents uploaded yet. Ask the user to upload an Excel file using the 📎 button.`
 
 export type Msg = { role: "user" | "assistant"; content: string }
 
@@ -37,57 +37,38 @@ function buildContext(content: string, userMessage: string): string {
 
   if (sheetSections.length <= 1) return content
 
-  // Check if user is asking about a specific sheet by name
+  // If user asks about a specific sheet — send it FULLY
   for (const section of sheetSections) {
     const nameMatch = section.match(/=== Sheet: (.+?) ===/)
     const sheetName = (nameMatch?.[1] ?? "").toLowerCase()
     if (sheetName && msgLower.includes(sheetName)) {
-      // User asked about this specific sheet — send it FULLY + all small sheets
       const smallSheets = sheetSections.filter(s => s !== section && s.length < 5000)
-      const fullContext = [section, ...smallSheets].join("\n\n")
-      // Only truncate if absolutely massive (>80k chars = ~20k tokens)
-      return fullContext.length > 80000 ? fullContext.slice(0, 80000) : fullContext
+      const full = [section, ...smallSheets].join("\n\n")
+      return full.length > 80000 ? full.slice(0, 80000) : full
     }
   }
 
-  // General question — send ALL sheets proportionally
-  // Budget: 40k chars total, small sheets get full content, large sheets split evenly
-  const TOTAL_BUDGET = 40000
-  const smallSheets = sheetSections.filter(s => s.length <= 4000)
-  const largeSheets = sheetSections.filter(s => s.length > 4000)
-  const smallTotal = smallSheets.reduce((sum, s) => sum + s.length, 0)
-  const remaining = TOTAL_BUDGET - smallTotal
-
-  if (largeSheets.length === 0) return sheetSections.join("\n\n")
-
-  const perSheet = Math.floor(remaining / largeSheets.length)
-  const trimmedLarge = largeSheets.map(s =>
-    s.length <= perSheet ? s : s.slice(0, perSheet) + `\n...[truncated — ask specifically about this sheet for full details]`
+  // General question — all sheets proportionally
+  const BUDGET = 40000
+  const small = sheetSections.filter(s => s.length <= 4000)
+  const large = sheetSections.filter(s => s.length > 4000)
+  const smallTotal = small.reduce((sum, s) => sum + s.length, 0)
+  const remaining = BUDGET - smallTotal
+  if (large.length === 0) return sheetSections.join("\n\n")
+  const perSheet = Math.floor(remaining / large.length)
+  const trimmed = large.map(s =>
+    s.length <= perSheet ? s : s.slice(0, perSheet) + `\n...[ask specifically about this sheet for full details]`
   )
-
-  return [...smallSheets, ...trimmedLarge].join("\n\n")
+  return [...small, ...trimmed].join("\n\n")
 }
 
 export async function ragStream(userMessage: string, history: Msg[], chatId?: string, activeDocIds?: string[]) {
-  const allDocs = await db.documentContent.findMany({
-    include: { document: { select: { id: true, name: true, projectName: true, temporary: true, chatId: true } } },
+  // ONLY load documents uploaded in this specific chat — nothing else
+  const docs = chatId ? await db.documentContent.findMany({
+    where: { document: { chatId } },
+    include: { document: { select: { id: true, name: true, projectName: true } } },
     orderBy: { createdAt: "desc" },
-    take: 10,
-  })
-
-  let docs = allDocs.filter(d => {
-    if (!d.document) return false
-    if (!d.document.temporary) return true
-    if (d.document.temporary && chatId && d.document.chatId === chatId) return true
-    if (d.document.temporary && !d.document.chatId && chatId) return true
-    return false
-  })
-
-  if (activeDocIds && activeDocIds.length > 0) {
-    const permanent = docs.filter(d => !d.document?.temporary)
-    const temp = docs.filter(d => d.document?.temporary)
-    docs = [...permanent.filter(d => activeDocIds.includes(d.document!.id)), ...temp]
-  }
+  }) : []
 
   let systemPrompt: string
   if (docs.length > 0) {
@@ -118,5 +99,5 @@ export async function ragStream(userMessage: string, history: Msg[], chatId?: st
     }
   }
 
-  return { tokens: tokens(), sources: docs.map(d => d.document!.name) }
+  return { tokens: tokens(), sources: [...new Set(docs.map(d => d.document!.name))] }
 }
