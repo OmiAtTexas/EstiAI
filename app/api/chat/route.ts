@@ -35,6 +35,17 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  // Link any recently uploaded docs with no chatId to this new chat
+  await db.document.updateMany({
+    where: {
+      uploadedBy: userId,
+      chatId: null,
+      temporary: true,
+      createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) } // last 30 mins
+    },
+    data: { chatId: chat.id }
+  })
+
   await db.message.create({
     data: {
       chatId: chat.id,
