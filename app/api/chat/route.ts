@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   try {
     // If images are attached — use vision directly
     if (images && images.length > 0) {
-      const content: Anthropic.ContentBlockParam[] = []
+      const content: Anthropic.MessageParam["content"] = []
 
       // Add images
       for (const img of images) {
