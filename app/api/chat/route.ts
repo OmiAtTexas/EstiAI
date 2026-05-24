@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getToken } from "next-auth/jwt"
 import { db } from "@/lib/db"
 import { ragStream } from "@/lib/rag"
+import Anthropic from "@anthropic-ai/sdk"
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 export const maxDuration = 60
 
@@ -23,7 +25,19 @@ export async function POST(req: NextRequest) {
     if (!found) return NextResponse.json({ error: "Chat not found" }, { status: 404 })
     chat = found
   } else {
-    const title = message.length > 55 ? message.slice(0, 52) + "…" : message
+    // Generate a smart title using AI
+    const titleResponse = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 20,
+      messages: [{
+        role: "user",
+        content: `Generate a short 4-6 word title for a chat that starts with this message: "${message.slice(0, 200)}". Reply with ONLY the title, no quotes, no punctuation at the end.`
+      }]
+    })
+    const title = titleResponse.content[0].type === "text"
+      ? titleResponse.content[0].text.trim().slice(0, 60)
+      : message.slice(0, 55)
+
     chat = await db.chat.create({
       data: { userId, title },
       include: { messages: true },
