@@ -10,10 +10,9 @@ export function middleware(req: NextRequest) {
     loginUrl.searchParams.set("callbackUrl", req.nextUrl.pathname)
     return NextResponse.redirect(loginUrl)
   }
-
   return NextResponse.next()
 }
 
 export const config = {
-  matcher: ["/((?!login|api/auth|_next|favicon.ico|public).*)"],
+  matcher: ["/((?!login|api/auth|_next|favicon.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.svg|.*\\.ico|.*\\.webp|.*\\.gif).*)"],
 }
