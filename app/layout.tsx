@@ -20,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon" type="image/png" href="/tab-logo.png" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" type="image/png" href="/tab-logo.png" />
+        <link rel="icon" type="image/png" href="/esti-mate-logo.png" />
       </head>
       <body>
         <SessionProvider>
