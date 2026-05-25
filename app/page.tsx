@@ -42,7 +42,7 @@ export default function LandingPage() {
                             className="h-full w-full object-contain"
                         />
                     </div>
-                    <span className="font-bold text-lg" style={{ color: T.text }}>EstimateAI</span>
+                    <span className="font-bold text-lg" style={{ color: T.text }}>Esti-Mate AI</span>
                 </div>
                 <div className="flex items-center gap-3">
                     <button onClick={() => setIsDark(!isDark)}
@@ -74,7 +74,8 @@ export default function LandingPage() {
                 </h1>
 
                 <p className="text-lg mb-8 leading-relaxed" style={{ color: T.muted }}>
-                    Stop digging through spreadsheets. Ask EstimateAI questions about your project costs,
+                    Stop digging through spreadsheets. Ask
+                    Esti-Mate AI questions about your project costs,
                     labor rates, and estimates — and get answers in seconds.
                 </p>
 
@@ -147,7 +148,7 @@ export default function LandingPage() {
 
             {/* Footer */}
             <div className="text-center py-6 text-xs" style={{ color: T.faint, borderTop: `1px solid ${T.border}` }}>
-                EstimateAI · Internal platform · Powered for your company
+                Esti-MateAI · Internal platform · Powered for your company
             </div>
         </div>
     )
