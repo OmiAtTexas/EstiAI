@@ -2,6 +2,7 @@
 import { signIn } from "next-auth/react"
 import { HardHat, FileSpreadsheet, MessageSquare, Zap, Shield, BarChart3, ArrowRight, Check } from "lucide-react"
 import { useState } from "react"
+import Image from "next/image"
 
 export default function LandingPage() {
     const [isDark, setIsDark] = useState(true)
@@ -31,9 +32,15 @@ export default function LandingPage() {
             {/* Nav */}
             <nav className="flex items-center justify-between px-8 py-4 max-w-6xl mx-auto">
                 <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-                        style={{ background: `${T.accent}20`, border: `1px solid ${T.accent}30` }}>
-                        <HardHat size={16} color={T.accent} />
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden">
+                        <Image
+                            src="/esti-mate-logo.png"
+                            alt="Esti-Mate AI"
+                            width={32}
+                            height={32}
+                            priority
+                            className="h-full w-full object-contain"
+                        />
                     </div>
                     <span className="font-bold text-lg" style={{ color: T.text }}>EstimateAI</span>
                 </div>
