@@ -48,7 +48,7 @@ function LoginContent() {
           <div className="flex flex-col items-center mb-8">
             {/* Logo image replacing HardHat icon */}
             <img
-              src="/esti-mate-logo.png"
+              src="public/esti-mate-logo.png"
               alt="Esti-Mate AI"
               style={{ width: 90, height: 90, objectFit: "contain", marginBottom: 12 }}
             />
