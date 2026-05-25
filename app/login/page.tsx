@@ -2,7 +2,6 @@
 import { Suspense } from "react"
 import { signIn } from "next-auth/react"
 import { useSearchParams } from "next/navigation"
-import { HardHat } from "lucide-react"
 import { useState } from "react"
 
 const ERRORS: Record<string, string> = {
@@ -47,11 +46,13 @@ function LoginContent() {
         </div>
         <div className="rounded-2xl p-8 transition-all duration-500 ease-in-out" style={{ background: T.card, border: `1px solid ${T.border}` }}>
           <div className="flex flex-col items-center mb-8">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-colors duration-500 ease-in-out"
-              style={{ background: `${T.accent}15`, border: `1px solid ${T.accent}30` }}>
-              <HardHat size={22} color={T.accent} className="transition-colors duration-500 ease-in-out" />
-            </div>
-            <h1 className="text-lg font-semibold transition-colors duration-500 ease-in-out" style={{ color: T.text }}> Your Esti-MateAI</h1>
+            {/* Logo image replacing HardHat icon */}
+            <img
+              src="/esti-mate-logo.png"
+              alt="Esti-Mate AI"
+              style={{ width: 90, height: 90, objectFit: "contain", marginBottom: 12 }}
+            />
+            <h1 className="text-lg font-semibold transition-colors duration-500 ease-in-out" style={{ color: T.text }}>Your Esti-MateAI</h1>
             <p className="text-xs mt-1 transition-colors duration-500 ease-in-out" style={{ color: T.muted }}>Cost Intelligence Platform</p>
           </div>
           {errMsg && (
