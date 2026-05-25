@@ -246,10 +246,7 @@ export function Sidebar({ user }: { user: User }) {
       <div className="flex items-center h-14 px-3 shrink-0 gap-2" style={{ borderBottom: `1px solid ${T.border}` }}>
         {open && (
           <>
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-              style={{ background: `${T.accent}20`, border: `1px solid ${T.accent}35` }}>
-              <HardHat size={14} color={T.accent} />
-            </div>
+            <img src="/esti-mate-logo.png" alt="Esti-Mate AI" style={{ width: 28, height: 28, borderRadius: 8, objectFit: "contain" }} />
             <span className="font-semibold text-sm flex-1" style={{ color: T.text }}>Esti-Mate AI</span>
           </>
         )}

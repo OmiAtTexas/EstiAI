@@ -227,10 +227,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         <div className="flex-1 overflow-y-auto" style={{ background: T.bg }}>
           {empty ? (
             <div className="flex flex-col items-center justify-center h-full px-6 py-12">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
-                style={{ background: `${T.accent}15`, border: `1px solid ${T.accent}30` }}>
-                <HardHat size={20} color={T.accent} />
-              </div>
+              <img src="/esti-mate-logo.png" alt="Esti-Mate AI" style={{ width: 64, height: 64, objectFit: "contain", marginBottom: 16 }} />
               <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>What can I help you estimate?</h3>
               <p className="text-sm text-center max-w-md leading-relaxed" style={{ color: T.muted }}>
                 Upload an Excel file using 📎 or paste a screenshot with Cmd+V. Ask anything about costs, breakdowns, or comparisons.
