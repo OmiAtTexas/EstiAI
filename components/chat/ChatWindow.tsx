@@ -31,8 +31,13 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const [allDocs, setAllDocs] = useState<DocInfo[]>([])
   const [activeDocIds, setActiveDocIds] = useState<string[] | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const chatIdRef = useRef<string | null>(initId) // ref so closures always have latest chatId
+  const pendingUploadsRef = useRef<{ content: string; attachments: any[] }[]>([]) // pending uploads when chatId is null
   const { T } = useTheme()
   const { toast } = useToast()
+
+  // Keep ref in sync with state
+  useEffect(() => { chatIdRef.current = chatId }, [chatId])
 
   useEffect(() => {
     fetch("/api/documents")
@@ -71,7 +76,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
     const uploaded: string[] = []
     const failed: string[] = []
-    const currentChatId = chatId
+    const currentChatId = chatIdRef.current // use ref not state
 
     for (const f of files) {
       const fd = new FormData()
@@ -102,13 +107,16 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
     setMsgs(p => p.map(m => m.id === uploadingId ? { ...m, content: finalContent, fileAttachments } : m))
 
-    // Save to DB so it persists
     if (currentChatId && uploaded.length > 0) {
+      // Chat exists — save immediately
       await fetch("/api/chat/upload-message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chatId: currentChatId, content: finalContent, attachments: fileAttachments })
       })
+    } else if (uploaded.length > 0) {
+      // No chat yet — store in ref to save after first message creates the chat
+      pendingUploadsRef.current.push({ content: finalContent, attachments: fileAttachments })
     }
   }
 
@@ -117,7 +125,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     if (isStreaming) return
     if (activeDocIds === null) { toast("Loading, please wait...", "info"); return }
 
-    // Convert images to base64 FIRST — this is what we display AND send to API
     const imagePayloads = attachedImages
       ? await Promise.all(attachedImages.map(async a => ({
         base64: await fileToBase64(a.file),
@@ -125,7 +132,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       })))
       : []
 
-    // Use base64 data URLs for display — these persist after tab close (no blob URLs)
     const imagePreviews = imagePayloads.map(img => `data:${img.mimeType};base64,${img.base64}`)
 
     const userMsgId = Date.now().toString()
@@ -133,14 +139,13 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       id: userMsgId,
       role: "user",
       content: text || "What's in this image?",
-      imagePreviews, // base64 — survives tab close
+      imagePreviews,
     }])
     setIsStreaming(true)
     setStreamText("")
 
     let full = ""
     let finalSources: string[] = []
-    let newChatId = chatId
 
     try {
       const res = await fetch("/api/chat", {
@@ -148,7 +153,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text || "What's in this image?",
-          chatId,
+          chatId: chatIdRef.current,
           activeDocIds,
           images: imagePayloads,
         }),
@@ -172,19 +177,22 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           try {
             const ev = JSON.parse(data)
             if (ev.type === "init") {
-              newChatId = ev.chatId
-              setChatId(ev.chatId)
-              if (!initId) window.history.replaceState(null, "", `/chat/${ev.chatId}`)
+              const newChatId = ev.chatId
+              setChatId(newChatId)
+              chatIdRef.current = newChatId
+              if (!initId) window.history.replaceState(null, "", `/chat/${newChatId}`)
 
-              // Save pending upload messages now that chatId exists
-              const pendingUploads = msgs.filter(m => m.fileAttachments && m.fileAttachments.length > 0)
-              for (const m of pendingUploads) {
+              // Save all pending upload messages now that chatId exists
+              // Use ref — not stale state closure
+              for (const pending of pendingUploadsRef.current) {
                 await fetch("/api/chat/upload-message", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ chatId: ev.chatId, content: m.content, attachments: m.fileAttachments })
+                  body: JSON.stringify({ chatId: newChatId, content: pending.content, attachments: pending.attachments })
                 })
               }
+              pendingUploadsRef.current = [] // clear after saving
+
             } else if (ev.type === "token") {
               full += ev.text
               setStreamText(full)
@@ -239,7 +247,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
               </button>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto px-4 py-6" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div className="max-w-5xl mx-auto px-6 py-6" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {msgs.map(m => <MessageBubble key={m.id} msg={m} />)}
               {isStreaming && streamText && (
                 <MessageBubble msg={{ id: "streaming", role: "assistant", content: streamText }} streaming />
@@ -251,7 +259,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         </div>
 
         <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
-          <div className="max-w-3xl mx-auto px-4 py-4">
+          <div className="max-w-5xl mx-auto px-6 py-4">
             <MessageInput onSend={send} onFilesSelected={handleFiles} disabled={isStreaming || uploading} />
             <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
               Paste images with Cmd+V · Attach Excel with 📎 · Esti-Mate AI can make mistakes.
