@@ -1,6 +1,6 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
-import { HardHat, LayoutDashboard, X } from "lucide-react"
+import { LayoutDashboard, X } from "lucide-react"
 import { MessageBubble, type Message } from "./MessageBubble"
 import { MessageInput, type AttachedFile } from "./MessageInput"
 import { TypingIndicator } from "./TypingIndicator"
@@ -8,8 +8,6 @@ import { Dashboard, type DashboardData } from "./Dashboard"
 import { useTheme } from "@/components/layout/Sidebar"
 import { OnboardingModal } from "@/components/OnboardingModal"
 import { useToast } from "@/components/Toast"
-
-type DocInfo = { id: string; name: string; projectName?: string }
 
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -20,10 +18,17 @@ async function fileToBase64(file: File): Promise<string> {
   })
 }
 
-// Parse <dashboard> JSON block from AI response
+// Strip <dashboard>...</dashboard> from text, return clean text + parsed data
 function parseDashboard(text: string): { clean: string; data: DashboardData | null } {
   const match = text.match(/<dashboard>([\s\S]*?)<\/dashboard>/)
-  if (!match) return { clean: text, data: null }
+  if (!match) {
+    // If <dashboard> started but hasn't closed yet, hide everything from it onwards
+    const startIdx = text.indexOf("<dashboard>")
+    if (startIdx !== -1) {
+      return { clean: text.slice(0, startIdx).trim(), data: null }
+    }
+    return { clean: text, data: null }
+  }
   try {
     const data = JSON.parse(match[1].trim())
     const clean = text.replace(/<dashboard>[\s\S]*?<\/dashboard>/, "").trim()
@@ -33,6 +38,8 @@ function parseDashboard(text: string): { clean: string; data: DashboardData | nu
     return { clean, data: null }
   }
 }
+
+const DASHBOARD_STORAGE_KEY = "esti_dashboard"
 
 export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   chatId: string | null; messages: Message[]
@@ -53,6 +60,18 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const { toast } = useToast()
 
   useEffect(() => { chatIdRef.current = chatId }, [chatId])
+
+  // Load persisted dashboard from localStorage
+  useEffect(() => {
+    if (initId && typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(`${DASHBOARD_STORAGE_KEY}_${initId}`)
+        if (stored) {
+          setDashboardData(JSON.parse(stored))
+        }
+      } catch { }
+    }
+  }, [initId])
 
   useEffect(() => {
     fetch("/api/documents")
@@ -180,7 +199,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
               pendingUploadsRef.current = []
             } else if (ev.type === "token") {
               full += ev.text
-              // Show streaming text without the dashboard block
+              // Hide <dashboard> block from displayed streaming text
               const { clean } = parseDashboard(full)
               setStreamText(clean)
             } else if (ev.type === "done") {
@@ -190,12 +209,19 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         }
       }
 
-      // Parse dashboard from final response
+      // Parse final dashboard data
       const { clean, data: dashData } = parseDashboard(full)
 
       if (dashData) {
         setDashboardData(dashData)
         setShowDashboard(true)
+        // Persist to localStorage so it survives navigation
+        const currentId = chatIdRef.current
+        if (currentId) {
+          try {
+            localStorage.setItem(`${DASHBOARD_STORAGE_KEY}_${currentId}`, JSON.stringify(dashData))
+          } catch { }
+        }
       }
 
       setMsgs(p => [...p, {
@@ -221,7 +247,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         <OnboardingModal onClose={() => { setShowOnboarding(false); localStorage.setItem("onboarded", "true") }} />
       )}
 
-      {/* Main chat area */}
+      {/* Chat area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
         <div className="flex-1 overflow-y-auto" style={{ background: T.bg }}>
           {empty ? (
@@ -249,8 +275,8 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         </div>
 
         <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
-          <div className="max-w-3xl mx-auto px-4 pt-2 pb-1 flex items-center justify-between">
-            {dashboardData && (
+          {dashboardData && (
+            <div className="max-w-3xl mx-auto px-4 pt-2">
               <button
                 onClick={() => setShowDashboard(!showDashboard)}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
@@ -263,9 +289,9 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
                 <LayoutDashboard size={12} />
                 {showDashboard ? "Hide dashboard" : "Show dashboard"}
               </button>
-            )}
-          </div>
-          <div className="max-w-3xl mx-auto px-4 pb-4">
+            </div>
+          )}
+          <div className="max-w-3xl mx-auto px-4 pt-2 pb-4">
             <MessageInput onSend={send} onFilesSelected={handleFiles} disabled={isStreaming || uploading} />
             <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
               Paste images with Cmd+V · Attach Excel with 📎 · Esti-Mate AI can make mistakes.
@@ -274,14 +300,10 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         </div>
       </div>
 
-      {/* Live dashboard panel */}
+      {/* Live dashboard panel — slides in from right */}
       {showDashboard && dashboardData && (
         <div className="shrink-0 h-full flex flex-col"
-          style={{
-            width: 280,
-            borderLeft: `1px solid ${T.border}`,
-            background: T.surface,
-          }}>
+          style={{ width: 280, borderLeft: `1px solid ${T.border}`, background: T.surface }}>
           <div className="flex items-center justify-between px-3 py-3 shrink-0"
             style={{ borderBottom: `1px solid ${T.border}` }}>
             <div className="flex items-center gap-2">

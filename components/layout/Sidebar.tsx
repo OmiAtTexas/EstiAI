@@ -246,7 +246,10 @@ export function Sidebar({ user }: { user: User }) {
       <div className="flex items-center h-14 px-3 shrink-0 gap-2" style={{ borderBottom: `1px solid ${T.border}` }}>
         {open && (
           <>
-            <img src="/esti-mate-logo.png" alt="Esti-Mate AI" style={{ width: 28, height: 28, borderRadius: 8, objectFit: "contain" }} />
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: `${T.accent}20`, border: `1px solid ${T.accent}35` }}>
+              <HardHat size={14} color={T.accent} />
+            </div>
             <span className="font-semibold text-sm flex-1" style={{ color: T.text }}>Esti-Mate AI</span>
           </>
         )}
@@ -260,7 +263,7 @@ export function Sidebar({ user }: { user: User }) {
 
       {/* New chat */}
       <div className="px-2 py-2 shrink-0">
-        <Link href="/chat">
+        <Link href="/chat" onClick={() => { try { sessionStorage.setItem("wantsNewChat", "1") } catch { } }}>
           <button className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg font-semibold text-sm transition-all"
             style={{ background: T.accent, color: T.accentText, justifyContent: open ? "flex-start" : "center" }}
             onMouseEnter={e => (e.currentTarget.style.background = T.accentDark)}
