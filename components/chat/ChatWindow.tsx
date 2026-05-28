@@ -234,7 +234,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
               </button>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto px-4 py-6" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div className="max-w-5xl mx-auto px-6 py-6" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {msgs.map(m => <MessageBubble key={m.id} msg={m} />)}
               {isStreaming && streamText && (
                 <MessageBubble msg={{ id: "streaming", role: "assistant", content: streamText }} streaming />
@@ -246,7 +246,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         </div>
 
         <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
-          <div className="max-w-3xl mx-auto px-4 py-4">
+          <div className="max-w-5xl mx-auto px-6 py-4">
             <MessageInput onSend={send} onFilesSelected={handleFiles} disabled={isStreaming || uploading} />
             <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
               Paste images with Cmd+V · Attach Excel with 📎 · Esti-Mate AI can make mistakes.
