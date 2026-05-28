@@ -1,4 +1,11 @@
 import { ChatWindow } from "@/components/chat/ChatWindow"
+import { ClientRedirect } from "./ClientRedirect"
+
 export default function NewChat() {
-  return <ChatWindow chatId={null} messages={[]} />
+  return (
+    <>
+      <ClientRedirect />
+      <ChatWindow chatId={null} messages={[]} />
+    </>
+  )
 }
