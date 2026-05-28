@@ -1,9 +1,10 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
-import { HardHat } from "lucide-react"
+import { HardHat, LayoutDashboard, X } from "lucide-react"
 import { MessageBubble, type Message } from "./MessageBubble"
 import { MessageInput, type AttachedFile } from "./MessageInput"
 import { TypingIndicator } from "./TypingIndicator"
+import { Dashboard, type DashboardData } from "./Dashboard"
 import { useTheme } from "@/components/layout/Sidebar"
 import { OnboardingModal } from "@/components/OnboardingModal"
 import { useToast } from "@/components/Toast"
@@ -19,6 +20,20 @@ async function fileToBase64(file: File): Promise<string> {
   })
 }
 
+// Parse <dashboard> JSON block from AI response
+function parseDashboard(text: string): { clean: string; data: DashboardData | null } {
+  const match = text.match(/<dashboard>([\s\S]*?)<\/dashboard>/)
+  if (!match) return { clean: text, data: null }
+  try {
+    const data = JSON.parse(match[1].trim())
+    const clean = text.replace(/<dashboard>[\s\S]*?<\/dashboard>/, "").trim()
+    return { clean, data }
+  } catch {
+    const clean = text.replace(/<dashboard>[\s\S]*?<\/dashboard>/, "").trim()
+    return { clean, data: null }
+  }
+}
+
 export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   chatId: string | null; messages: Message[]
 }) {
@@ -28,26 +43,23 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   const [streamText, setStreamText] = useState("")
   const [uploading, setUploading] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
-  const [allDocs, setAllDocs] = useState<DocInfo[]>([])
   const [activeDocIds, setActiveDocIds] = useState<string[] | null>(null)
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
+  const [showDashboard, setShowDashboard] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const chatIdRef = useRef<string | null>(initId) // ref so closures always have latest chatId
-  const pendingUploadsRef = useRef<{ content: string; attachments: any[] }[]>([]) // pending uploads when chatId is null
+  const chatIdRef = useRef<string | null>(initId)
+  const pendingUploadsRef = useRef<{ content: string; attachments: any[] }[]>([])
   const { T } = useTheme()
   const { toast } = useToast()
 
-  // Keep ref in sync with state
   useEffect(() => { chatIdRef.current = chatId }, [chatId])
 
   useEffect(() => {
     fetch("/api/documents")
       .then(r => r.json())
       .then(d => {
-        const docs: DocInfo[] = (d.documents ?? [])
-          .filter((doc: any) => !doc.temporary)
-          .map((doc: any) => ({ id: doc.id, name: doc.name, projectName: doc.projectName }))
-        setAllDocs(docs)
-        setActiveDocIds(docs.map(d => d.id))
+        const docs = (d.documents ?? []).filter((doc: any) => !doc.temporary)
+        setActiveDocIds(docs.map((d: any) => d.id))
       })
       .catch(() => setActiveDocIds([]))
   }, [])
@@ -58,7 +70,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     }
   }, [])
 
-  // Save current chatId so tab reopen restores it
   useEffect(() => {
     if (chatId) localStorage.setItem("lastChatId", chatId)
   }, [chatId])
@@ -70,14 +81,11 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
   async function handleFiles(files: File[]) {
     if (files.length === 0) return
     setUploading(true)
-
     const uploadingId = Date.now().toString() + "_upload"
     setMsgs(p => [...p, { id: uploadingId, role: "assistant", content: `⏳ Uploading **${files.map(f => f.name).join(", ")}**…` }])
-
     const uploaded: string[] = []
     const failed: string[] = []
-    const currentChatId = chatIdRef.current // use ref not state
-
+    const currentChatId = chatIdRef.current
     for (const f of files) {
       const fd = new FormData()
       fd.append("file", f)
@@ -93,29 +101,22 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         failed.push(`${f.name}: ${err?.message ?? "Network error"}`)
       }
     }
-
     setUploading(false)
     if (uploaded.length > 0) toast(`${uploaded.join(", ")} ready`, "success")
     if (failed.length > 0) toast(`Upload failed: ${failed.join(", ")}`, "error")
-
     const lines: string[] = []
     if (uploaded.length > 0) lines.push(`✅ **${uploaded.join(", ")}** uploaded. Ask me anything about it.`)
     if (failed.length > 0) lines.push(`❌ Failed: ${failed.join(", ")}`)
-
     const finalContent = lines.join("\n\n")
     const fileAttachments = uploaded.map(name => ({ type: "excel", name }))
-
     setMsgs(p => p.map(m => m.id === uploadingId ? { ...m, content: finalContent, fileAttachments } : m))
-
     if (currentChatId && uploaded.length > 0) {
-      // Chat exists — save immediately
       await fetch("/api/chat/upload-message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chatId: currentChatId, content: finalContent, attachments: fileAttachments })
       })
     } else if (uploaded.length > 0) {
-      // No chat yet — store in ref to save after first message creates the chat
       pendingUploadsRef.current.push({ content: finalContent, attachments: fileAttachments })
     }
   }
@@ -133,14 +134,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       : []
 
     const imagePreviews = imagePayloads.map(img => `data:${img.mimeType};base64,${img.base64}`)
-
-    const userMsgId = Date.now().toString()
-    setMsgs(p => [...p, {
-      id: userMsgId,
-      role: "user",
-      content: text || "What's in this image?",
-      imagePreviews,
-    }])
+    setMsgs(p => [...p, { id: Date.now().toString(), role: "user", content: text || "What's in this image?", imagePreviews }])
     setIsStreaming(true)
     setStreamText("")
 
@@ -151,12 +145,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text || "What's in this image?",
-          chatId: chatIdRef.current,
-          activeDocIds,
-          images: imagePayloads,
-        }),
+        body: JSON.stringify({ message: text || "What's in this image?", chatId: chatIdRef.current, activeDocIds, images: imagePayloads }),
       })
       if (!res.ok) throw new Error(`Server error ${res.status}`)
 
@@ -181,9 +170,6 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
               setChatId(newChatId)
               chatIdRef.current = newChatId
               if (!initId) window.history.replaceState(null, "", `/chat/${newChatId}`)
-
-              // Save all pending upload messages now that chatId exists
-              // Use ref — not stale state closure
               for (const pending of pendingUploadsRef.current) {
                 await fetch("/api/chat/upload-message", {
                   method: "POST",
@@ -191,11 +177,12 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
                   body: JSON.stringify({ chatId: newChatId, content: pending.content, attachments: pending.attachments })
                 })
               }
-              pendingUploadsRef.current = [] // clear after saving
-
+              pendingUploadsRef.current = []
             } else if (ev.type === "token") {
               full += ev.text
-              setStreamText(full)
+              // Show streaming text without the dashboard block
+              const { clean } = parseDashboard(full)
+              setStreamText(clean)
             } else if (ev.type === "done") {
               finalSources = ev.sources ?? []
             }
@@ -203,19 +190,23 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         }
       }
 
+      // Parse dashboard from final response
+      const { clean, data: dashData } = parseDashboard(full)
+
+      if (dashData) {
+        setDashboardData(dashData)
+        setShowDashboard(true)
+      }
+
       setMsgs(p => [...p, {
         id: Date.now() + "_ai",
         role: "assistant",
-        content: full || "Sorry, I didn't receive a response. Please try again.",
+        content: clean || "Sorry, I didn't receive a response. Please try again.",
         sources: finalSources,
       }])
       setStreamText("")
     } catch (err: any) {
-      setMsgs(p => [...p, {
-        id: Date.now() + "_err",
-        role: "assistant",
-        content: `Sorry, something went wrong: ${err?.message ?? "Unknown error"}`,
-      }])
+      setMsgs(p => [...p, { id: Date.now() + "_err", role: "assistant", content: `Sorry, something went wrong: ${err?.message ?? "Unknown error"}` }])
       setStreamText("")
     } finally {
       setIsStreaming(false)
@@ -230,7 +221,8 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         <OnboardingModal onClose={() => { setShowOnboarding(false); localStorage.setItem("onboarded", "true") }} />
       )}
 
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+      {/* Main chat area */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
         <div className="flex-1 overflow-y-auto" style={{ background: T.bg }}>
           {empty ? (
             <div className="flex flex-col items-center justify-center h-full px-6 py-12">
@@ -247,11 +239,9 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
               </button>
             </div>
           ) : (
-            <div className="max-w-5xl mx-auto px-6 py-6" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div className="max-w-3xl mx-auto px-4 py-6" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {msgs.map(m => <MessageBubble key={m.id} msg={m} />)}
-              {isStreaming && streamText && (
-                <MessageBubble msg={{ id: "streaming", role: "assistant", content: streamText }} streaming />
-              )}
+              {isStreaming && streamText && <MessageBubble msg={{ id: "streaming", role: "assistant", content: streamText }} streaming />}
               {isStreaming && !streamText && <TypingIndicator />}
               <div ref={bottomRef} />
             </div>
@@ -259,7 +249,23 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         </div>
 
         <div className="shrink-0" style={{ borderTop: `1px solid ${T.border}`, background: T.sidebar }}>
-          <div className="max-w-5xl mx-auto px-6 py-4">
+          <div className="max-w-3xl mx-auto px-4 pt-2 pb-1 flex items-center justify-between">
+            {dashboardData && (
+              <button
+                onClick={() => setShowDashboard(!showDashboard)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+                style={{
+                  color: showDashboard ? T.accent : T.faint,
+                  background: showDashboard ? `${T.accent}10` : "transparent",
+                  border: `1px solid ${showDashboard ? T.accent + "30" : T.border}`,
+                  cursor: "pointer",
+                }}>
+                <LayoutDashboard size={12} />
+                {showDashboard ? "Hide dashboard" : "Show dashboard"}
+              </button>
+            )}
+          </div>
+          <div className="max-w-3xl mx-auto px-4 pb-4">
             <MessageInput onSend={send} onFilesSelected={handleFiles} disabled={isStreaming || uploading} />
             <p className="text-center text-[11px] mt-2" style={{ color: T.faint }}>
               Paste images with Cmd+V · Attach Excel with 📎 · Esti-Mate AI can make mistakes.
@@ -267,6 +273,31 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           </div>
         </div>
       </div>
+
+      {/* Live dashboard panel */}
+      {showDashboard && dashboardData && (
+        <div className="shrink-0 h-full flex flex-col"
+          style={{
+            width: 280,
+            borderLeft: `1px solid ${T.border}`,
+            background: T.surface,
+          }}>
+          <div className="flex items-center justify-between px-3 py-3 shrink-0"
+            style={{ borderBottom: `1px solid ${T.border}` }}>
+            <div className="flex items-center gap-2">
+              <LayoutDashboard size={13} color={T.accent} />
+              <span className="text-xs font-medium" style={{ color: T.text }}>Live Dashboard</span>
+            </div>
+            <button onClick={() => setShowDashboard(false)}
+              style={{ color: T.faint, background: "none", border: "none", cursor: "pointer", padding: 2 }}>
+              <X size={13} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <Dashboard data={dashboardData} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

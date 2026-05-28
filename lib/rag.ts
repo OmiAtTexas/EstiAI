@@ -19,7 +19,39 @@ CRITICAL RULES:
 5. Use markdown tables for cost data, breakdowns, comparisons
 6. Reference which sheet the data came from
 7. If not in the documents → say: "This information is not in the uploaded documents"
-8. Scan ALL sheets before answering — data is spread across multiple tabs
+8. Scan ALL sheets before answering
+
+DASHBOARD INSTRUCTIONS:
+After EVERY response that contains numbers, costs, or data from documents, you MUST append a <dashboard> JSON block at the very end of your response. This powers a live visual dashboard.
+
+The JSON format:
+<dashboard>
+{
+  "title": "Short project name",
+  "metrics": [
+    {"label": "Total Cost", "value": "$13.0M", "sub": "$413/SF"},
+    {"label": "Building", "value": "$9.7M"},
+    {"label": "Site", "value": "$3.3M"},
+    {"label": "Contingency", "value": "3%", "color": "#ef4444"}
+  ],
+  "bars": [
+    {"label": "Finishes", "value": 1272458, "max": 1272458},
+    {"label": "HVAC", "value": 1192454, "max": 1272458},
+    {"label": "Concrete", "value": 531632, "max": 1272458}
+  ],
+  "flags": [
+    "Contingency at 3% — below recommended 8-10%",
+    "Escalation rate hardcoded — should recalculate"
+  ]
+}
+</dashboard>
+
+RULES FOR DASHBOARD JSON:
+- metrics: up to 4 key numbers from the answer. value must be a formatted string like "$13.0M" or "4.43%"
+- bars: up to 6 items. value and max must be raw numbers (not strings). max = the largest value in the list
+- flags: only include if there are genuine concerns/issues. Empty array [] if none
+- If the question has no numbers (e.g. "what does escalation mean?") → omit the <dashboard> block entirely
+- The <dashboard> block must be valid JSON. Do not add comments inside it.
 
 UPLOADED FILES:`
 
@@ -35,50 +67,31 @@ function buildContext(content: string, userMessage: string): string {
   const msgLower = userMessage.toLowerCase()
   const sheetSections = content.split(/(?=\n?=== Sheet: )/).filter(s => s.trim())
 
-  if (sheetSections.length <= 1) {
-    // Single sheet or no sheet markers — send everything, no truncation
-    return content
-  }
+  if (sheetSections.length <= 1) return content
 
-  // If user asks about a specific sheet — send it COMPLETELY, no cuts
   for (const section of sheetSections) {
     const nameMatch = section.match(/=== Sheet: (.+?) ===/)
     const sheetName = (nameMatch?.[1] ?? "").toLowerCase()
     if (sheetName && msgLower.includes(sheetName)) {
-      // Send the full requested sheet + all small sheets
       const smallSheets = sheetSections.filter(s => s !== section && s.length < 5000)
       const full = [section, ...smallSheets].join("\n\n")
-      // Only hard cap at 120000 chars (~30k tokens) — way above normal sheet sizes
       return full.length > 120000 ? full.slice(0, 120000) : full
     }
   }
 
-  // General question — send ALL sheets
-  // Small sheets: send fully
-  // Large sheets: send proportionally but generously (10000 chars each minimum)
+  const BUDGET = 80000
   const totalContent = sheetSections.join("\n\n")
-  const TOTAL_BUDGET = 80000 // ~20k tokens — generous budget for full reading
+  if (totalContent.length <= BUDGET) return totalContent
 
-  if (totalContent.length <= TOTAL_BUDGET) {
-    // Everything fits — send everything with zero truncation
-    return totalContent
-  }
-
-  // Need to trim — allocate budget proportionally
   const small = sheetSections.filter(s => s.length <= 5000)
   const large = sheetSections.filter(s => s.length > 5000)
   const smallTotal = small.reduce((sum, s) => sum + s.length, 0)
-  const remaining = TOTAL_BUDGET - smallTotal
-
-  if (large.length === 0) return totalContent.slice(0, TOTAL_BUDGET)
-
+  const remaining = BUDGET - smallTotal
+  if (large.length === 0) return totalContent.slice(0, BUDGET)
   const perSheet = Math.floor(remaining / large.length)
   const trimmed = large.map(s =>
-    s.length <= perSheet
-      ? s
-      : s.slice(0, perSheet) + `\n...[ask specifically about this sheet for complete details]`
+    s.length <= perSheet ? s : s.slice(0, perSheet) + `\n...[ask specifically about this sheet for complete details]`
   )
-
   return [...small, ...trimmed].join("\n\n")
 }
 
@@ -99,7 +112,6 @@ export async function ragStream(
     })
   }
 
-  // Fallback: file uploaded before chat was created
   if (docs.length === 0 && userId) {
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
     docs = await db.documentContent.findMany({
@@ -122,7 +134,6 @@ export async function ragStream(
     const msgLower = userMessage.toLowerCase()
 
     if (docs.length > 1) {
-      // Check if user mentioned a specific doc
       const mentionedDoc = docs.find((d: any) => {
         const name = (d.document!.projectName || d.document!.name).toLowerCase()
         const filename = d.document!.name.toLowerCase().replace(/\.[^.]+$/, "")
@@ -134,7 +145,6 @@ export async function ragStream(
         const context = `\n${"=".repeat(60)}\nFILE: ${name}\n${"=".repeat(60)}\n${buildContext(mentionedDoc.content, userMessage)}`
         systemPrompt = `${SYSTEM_WITH_DOCS}\n${context}`
       } else {
-        // Multiple docs, user didn't specify — include all, instruct AI to ask
         const docList = docs.map((d: any) => d.document!.projectName || d.document!.name).join(", ")
         const context = docs.map((d: any) => {
           const name = d.document!.projectName || d.document!.name
@@ -143,7 +153,6 @@ export async function ragStream(
         systemPrompt = `${SYSTEM_WITH_DOCS}\n${context}\n\nNOTE: Multiple documents uploaded (${docList}). If the question is ambiguous, ask which document they mean before answering.`
       }
     } else {
-      // Single doc — always use it fully
       const name = docs[0].document!.projectName || docs[0].document!.name
       const context = `\n${"=".repeat(60)}\nFILE: ${name}\n${"=".repeat(60)}\n${buildContext(docs[0].content, userMessage)}`
       systemPrompt = `${SYSTEM_WITH_DOCS}\n${context}`
