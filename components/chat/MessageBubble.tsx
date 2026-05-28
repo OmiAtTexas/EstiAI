@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Copy, Check, ThumbsUp, ThumbsDown, X, ZoomIn, FileSpreadsheet, Eye } from "lucide-react"
 import { useTheme } from "@/components/layout/Sidebar"
 
@@ -22,23 +22,25 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
         <X size={20} />
       </button>
       <img src={src} alt="Preview" onClick={e => e.stopPropagation()}
-        style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 25px 60px rgba(0,0,0,0.5)" }} />
+        style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 12 }} />
     </div>
   )
 }
 
-// ── File Preview Modal ─────────────────────────────────────────
+// ── File Preview Modal — shows ALL rows, ALL sheets ────────────
 type SheetData = { name: string; rows: string[][] }
 
 function parseCSVContent(content: string): SheetData[] {
   const sheets: SheetData[] = []
   const sections = content.split(/=== Sheet: (.+?) ===\n/)
   if (sections.length <= 1) {
-    const rows = content.split("\n").filter(Boolean).slice(0, 50).map(r => r.split(","))
+    // No sheet markers — treat as single sheet, NO row limit
+    const rows = content.split("\n").filter(Boolean).map(r => r.split(","))
     sheets.push({ name: "Sheet 1", rows })
   } else {
     for (let i = 1; i < sections.length; i += 2) {
-      const rows = (sections[i + 1] ?? "").split("\n").filter(Boolean).slice(0, 50).map(r => r.split(","))
+      // NO .slice() — show ALL rows
+      const rows = (sections[i + 1] ?? "").split("\n").filter(Boolean).map(r => r.split(","))
       if (rows.length > 0) sheets.push({ name: sections[i], rows })
     }
   }
@@ -52,23 +54,22 @@ function FilePreviewModal({ fileName, onClose }: { fileName: string; onClose: ()
   const [error, setError] = useState("")
   const { T } = useTheme()
 
-  // Load on mount
-  useState(() => {
+  useEffect(() => {
     fetch(`/api/documents/preview?name=${encodeURIComponent(fileName)}`)
       .then(r => r.json())
       .then(d => {
         if (d.content) setSheets(parseCSVContent(d.content))
-        else setError("Could not load file preview")
+        else setError("Could not load preview")
       })
-      .catch(() => setError("Could not load file preview"))
+      .catch(() => setError("Could not load preview"))
       .finally(() => setLoading(false))
-  })
+  }, [fileName])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.85)" }} onClick={onClose}>
-      <div className="w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl flex flex-col"
-        style={{ background: "#1a1f2e", border: "1px solid rgba(255,255,255,0.14)", maxHeight: "85vh" }}
+      <div className="w-full max-w-5xl rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+        style={{ background: "#1a1f2e", border: "1px solid rgba(255,255,255,0.14)", maxHeight: "90vh" }}
         onClick={e => e.stopPropagation()}>
 
         {/* Header */}
@@ -81,7 +82,9 @@ function FilePreviewModal({ fileName, onClose }: { fileName: string; onClose: ()
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold truncate" style={{ color: T.text }}>{fileName}</p>
             <p className="text-xs" style={{ color: T.faint }}>
-              {sheets ? `${sheets.length} sheet${sheets.length !== 1 ? "s" : ""} · first 50 rows shown` : "Loading…"}
+              {sheets
+                ? `${sheets.length} sheet${sheets.length !== 1 ? "s" : ""} · ${sheets[activeSheet]?.rows.length ?? 0} rows`
+                : "Loading…"}
             </p>
           </div>
           <button onClick={onClose} style={{ color: T.faint, background: "none", border: "none", cursor: "pointer", padding: 4 }}>
@@ -91,10 +94,11 @@ function FilePreviewModal({ fileName, onClose }: { fileName: string; onClose: ()
 
         {/* Sheet tabs */}
         {sheets && sheets.length > 1 && (
-          <div className="flex gap-1 px-4 pt-3 shrink-0 overflow-x-auto" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="flex gap-1 px-4 pt-3 shrink-0 overflow-x-auto"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
             {sheets.map((s, i) => (
               <button key={i} onClick={() => setActiveSheet(i)}
-                className="px-3 py-1.5 rounded-t-lg text-xs font-medium whitespace-nowrap mb-0"
+                className="px-3 py-1.5 rounded-t-lg text-xs font-medium whitespace-nowrap"
                 style={{
                   background: activeSheet === i ? "#22c55e" : "rgba(255,255,255,0.06)",
                   color: activeSheet === i ? "#fff" : T.muted,
@@ -106,18 +110,10 @@ function FilePreviewModal({ fileName, onClose }: { fileName: string; onClose: ()
           </div>
         )}
 
-        {/* Table content */}
+        {/* Table — ALL rows, no limit */}
         <div className="flex-1 overflow-auto p-4">
-          {loading && (
-            <div className="flex items-center justify-center py-12" style={{ color: T.faint }}>
-              Loading preview…
-            </div>
-          )}
-          {error && (
-            <div className="flex items-center justify-center py-12" style={{ color: "#ef4444" }}>
-              {error}
-            </div>
-          )}
+          {loading && <div className="flex items-center justify-center py-12" style={{ color: T.faint }}>Loading…</div>}
+          {error && <div className="flex items-center justify-center py-12" style={{ color: "#ef4444" }}>{error}</div>}
           {sheets && sheets[activeSheet] && (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
@@ -127,11 +123,13 @@ function FilePreviewModal({ fileName, onClose }: { fileName: string; onClose: ()
                       background: "rgba(34,197,94,.12)", color: "#22c55e", fontWeight: 600,
                       textAlign: "left", padding: "6px 10px",
                       border: "1px solid rgba(255,255,255,0.08)", whiteSpace: "nowrap",
+                      position: "sticky", top: 0,
                     }}>{cell || `Col ${i + 1}`}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
+                {/* ALL rows — no .slice() */}
                 {sheets[activeSheet].rows.slice(1).map((row, ri) => (
                   <tr key={ri}>
                     {row.map((cell, ci) => (
@@ -184,7 +182,7 @@ export function MessageBubble({ msg, streaming = false }: { msg: Message; stream
 
         <div style={{ maxWidth: "84%", display: "flex", flexDirection: "column", gap: 6, alignItems: isUser ? "flex-end" : "flex-start" }}>
 
-          {/* Clickable image previews */}
+          {/* Persistent image previews — uses base64, survives tab close */}
           {isUser && msg.imagePreviews && msg.imagePreviews.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "flex-end" }}>
               {msg.imagePreviews.map((src, i) => (
@@ -202,14 +200,13 @@ export function MessageBubble({ msg, streaming = false }: { msg: Message; stream
             </div>
           )}
 
-          {/* Clickable file attachment cards */}
+          {/* Clickable file cards — shows full spreadsheet on click */}
           {!isUser && msg.fileAttachments && msg.fileAttachments.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {msg.fileAttachments.map((f, i) => (
-                <button key={i}
-                  onClick={() => setPreviewFile(f.name)}
-                  className="group flex items-center gap-2"
+                <button key={i} onClick={() => setPreviewFile(f.name)}
                   style={{
+                    display: "flex", alignItems: "center", gap: 6,
                     padding: "6px 12px", borderRadius: 10, cursor: "pointer",
                     background: `${T.accent}12`, border: `1px solid ${T.accent}30`,
                     transition: "all 0.15s",

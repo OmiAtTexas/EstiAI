@@ -66,7 +66,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
 
     const uploaded: string[] = []
     const failed: string[] = []
-    let currentChatId = chatId
+    const currentChatId = chatId
 
     for (const f of files) {
       const fd = new FormData()
@@ -95,14 +95,9 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     const finalContent = lines.join("\n\n")
     const fileAttachments = uploaded.map(name => ({ type: "excel", name }))
 
-    // Update message in UI with file attachment cards
-    setMsgs(p => p.map(m => m.id === uploadingId ? {
-      ...m,
-      content: finalContent,
-      fileAttachments,
-    } : m))
+    setMsgs(p => p.map(m => m.id === uploadingId ? { ...m, content: finalContent, fileAttachments } : m))
 
-    // Save to DB so it persists across navigation
+    // Save to DB so it persists
     if (currentChatId && uploaded.length > 0) {
       await fetch("/api/chat/upload-message", {
         method: "POST",
@@ -117,17 +112,7 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
     if (isStreaming) return
     if (activeDocIds === null) { toast("Loading, please wait...", "info"); return }
 
-    const userMsgId = Date.now().toString()
-    const imagePreviews = attachedImages?.map(a => (a as any).previewUrl) ?? []
-    setMsgs(p => [...p, {
-      id: userMsgId,
-      role: "user",
-      content: text || "What's in this image?",
-      imagePreviews,
-    }])
-    setIsStreaming(true)
-    setStreamText("")
-
+    // Convert images to base64 FIRST — this is what we display AND send to API
     const imagePayloads = attachedImages
       ? await Promise.all(attachedImages.map(async a => ({
         base64: await fileToBase64(a.file),
@@ -135,8 +120,22 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
       })))
       : []
 
+    // Use base64 data URLs for display — these persist after tab close (no blob URLs)
+    const imagePreviews = imagePayloads.map(img => `data:${img.mimeType};base64,${img.base64}`)
+
+    const userMsgId = Date.now().toString()
+    setMsgs(p => [...p, {
+      id: userMsgId,
+      role: "user",
+      content: text || "What's in this image?",
+      imagePreviews, // base64 — survives tab close
+    }])
+    setIsStreaming(true)
+    setStreamText("")
+
     let full = ""
     let finalSources: string[] = []
+    let newChatId = chatId
 
     try {
       const res = await fetch("/api/chat", {
@@ -168,22 +167,17 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
           try {
             const ev = JSON.parse(data)
             if (ev.type === "init") {
-              const newChatId = ev.chatId
-              setChatId(newChatId)
-              if (!initId) window.history.replaceState(null, "", `/chat/${newChatId}`)
+              newChatId = ev.chatId
+              setChatId(ev.chatId)
+              if (!initId) window.history.replaceState(null, "", `/chat/${ev.chatId}`)
 
-              // Now that chatId exists, save any pending upload messages that weren't saved
-              // (uploaded before first message created the chat)
+              // Save pending upload messages now that chatId exists
               const pendingUploads = msgs.filter(m => m.fileAttachments && m.fileAttachments.length > 0)
               for (const m of pendingUploads) {
                 await fetch("/api/chat/upload-message", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    chatId: newChatId,
-                    content: m.content,
-                    attachments: m.fileAttachments
-                  })
+                  body: JSON.stringify({ chatId: ev.chatId, content: m.content, attachments: m.fileAttachments })
                 })
               }
             } else if (ev.type === "token") {
@@ -227,7 +221,8 @@ export function ChatWindow({ chatId: initId, messages: initMsgs }: {
         <div className="flex-1 overflow-y-auto" style={{ background: T.bg }}>
           {empty ? (
             <div className="flex flex-col items-center justify-center h-full px-6 py-12">
-              <img src="/esti-mate-logo.png" alt="Esti-Mate AI" style={{ width: 64, height: 64, objectFit: "contain", marginBottom: 16 }} />
+              <img src="/esti-mate-logo.png" alt="Esti-Mate AI"
+                style={{ width: 80, height: 80, objectFit: "contain", marginBottom: 16 }} />
               <h3 className="text-base font-semibold mb-2" style={{ color: T.text }}>What can I help you estimate?</h3>
               <p className="text-sm text-center max-w-md leading-relaxed" style={{ color: T.muted }}>
                 Upload an Excel file using 📎 or paste a screenshot with Cmd+V. Ask anything about costs, breakdowns, or comparisons.
