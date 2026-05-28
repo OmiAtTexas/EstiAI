@@ -215,6 +215,10 @@ export function Sidebar({ user }: { user: User }) {
     await fetch(`/api/chats?id=${id}`, { method: "DELETE" })
     setChats(p => p.filter(c => c.id !== id))
     if (pathname === `/chat/${id}`) {
+      try {
+        localStorage.removeItem("lastChatId")
+        sessionStorage.setItem("wantsNewChat", "1")
+      } catch { }
       window.location.href = "/chat"
     }
   }
