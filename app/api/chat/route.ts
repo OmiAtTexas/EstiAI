@@ -8,6 +8,10 @@ export const maxDuration = 60
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
+function stripDashboard(text: string): string {
+  return text.replace(/<dashboard>[\s\S]*?<\/dashboard>/g, "").trim()
+}
+
 export async function POST(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -35,13 +39,12 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // Link any recently uploaded docs with no chatId to this new chat
   await db.document.updateMany({
     where: {
       uploadedBy: userId,
       chatId: null,
       temporary: true,
-      createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) } // last 30 mins
+      createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) }
     },
     data: { chatId: chat.id }
   })
@@ -51,7 +54,6 @@ export async function POST(req: NextRequest) {
       chatId: chat.id,
       role: "user",
       content: message || "Image attached",
-      // Store image base64 so they persist across navigation
       attachments: images && images.length > 0
         ? JSON.stringify(images.map((img: any) => `data:${img.mimeType};base64,${img.base64}`))
         : null,
@@ -64,31 +66,20 @@ export async function POST(req: NextRequest) {
   }))
 
   try {
-    // If images are attached — use vision directly
     if (images && images.length > 0) {
-      const content: Anthropic.MessageParam["content"] = []
-
-      // Add images
+      const content: any[] = []
       for (const img of images) {
         content.push({
           type: "image",
-          source: {
-            type: "base64",
-            media_type: img.mimeType as "image/png" | "image/jpeg" | "image/gif" | "image/webp",
-            data: img.base64,
-          },
+          source: { type: "base64", media_type: img.mimeType, data: img.base64 },
         })
       }
-
-      // Add text
-      if (message?.trim()) {
-        content.push({ type: "text", text: message })
-      }
+      if (message?.trim()) content.push({ type: "text", text: message })
 
       const response = await anthropic.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 2048,
-        system: `You are an estimating buddy for a construction cost management company, built by Om More. Analyze images carefully and provide detailed, accurate responses. If the image shows a document, spreadsheet, or estimate — extract and explain all relevant data.`,
+        system: `You are an estimating buddy for a construction cost management company, built by Om More. Analyze images carefully and provide detailed, accurate responses.`,
         messages: [
           ...history.slice(-6).map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
           { role: "user", content },
@@ -96,17 +87,12 @@ export async function POST(req: NextRequest) {
       })
 
       const full = response.content[0].type === "text" ? response.content[0].text : ""
+      const cleanFull = stripDashboard(full)
 
       await db.message.create({
-        data: {
-          chatId: chat.id,
-          role: "assistant",
-          content: full,
-          sources: JSON.stringify([]),
-        }
+        data: { chatId: chat.id, role: "assistant", content: cleanFull, sources: JSON.stringify([]) },
       })
 
-      // Update title after 3rd message
       const msgCount = await db.message.count({ where: { chatId: chat.id, role: "user" } })
       if (msgCount === 3) await updateTitle(chat.id, anthropic)
 
@@ -114,7 +100,6 @@ export async function POST(req: NextRequest) {
         start(controller) {
           const enc = new TextEncoder()
           controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: "init", chatId: chat.id })}\n\n`))
-          // Stream the full response word by word for smooth UX
           const words = full.split(" ")
           let i = 0
           const interval = setInterval(() => {
@@ -124,8 +109,7 @@ export async function POST(req: NextRequest) {
               controller.close()
               return
             }
-            const chunk = (i === 0 ? "" : " ") + words[i]
-            controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: "token", text: chunk })}\n\n`))
+            controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: "token", text: (i === 0 ? "" : " ") + words[i] })}\n\n`))
             i++
           }, 15)
         }
@@ -136,7 +120,6 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // No images — normal RAG flow
     const { tokens, sources } = await ragStream(message, history, chat.id, activeDocIds, userId)
     let full = ""
 
@@ -148,10 +131,13 @@ export async function POST(req: NextRequest) {
           full += tok
           controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: "token", text: tok })}\n\n`))
         }
+
+        // Strip dashboard block before saving to DB
+        const cleanFull = stripDashboard(full)
         await db.message.create({
-          data: { chatId: chat.id, role: "assistant", content: full, sources: JSON.stringify(sources) },
+          data: { chatId: chat.id, role: "assistant", content: cleanFull, sources: JSON.stringify(sources) },
         })
-        // Update title after 3rd message
+
         const msgCount = await db.message.count({ where: { chatId: chat.id, role: "user" } })
         if (msgCount === 3) await updateTitle(chat.id, anthropic)
 
@@ -187,5 +173,5 @@ async function updateTitle(chatId: string, anthropic: Anthropic) {
     })
     const newTitle = titleRes.content[0].type === "text" ? titleRes.content[0].text.trim().slice(0, 60) : ""
     if (newTitle) await db.chat.update({ where: { id: chatId }, data: { title: newTitle } })
-  } catch { }
+  } catch {}
 }
